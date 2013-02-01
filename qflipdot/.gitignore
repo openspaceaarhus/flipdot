@@ -1,0 +1,5 @@
+moc_*
+flipdot
+*.o
+Makefile
+tty_interface
