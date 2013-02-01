@@ -18,6 +18,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+extern char *serial_port;
+
 /*
  * Initialize platform, if there are no problems return ERROR_NONE.
  */
@@ -60,7 +62,7 @@ int platformInit(StcGame *game) {
         return ERROR_NO_IMAGES;
     }
 
-    game->platform->serial = open("/dev/ttyACM0", O_RDWR);
+    game->platform->serial = open(serial_port, O_RDWR);
 
     if(game->platform->serial < 0) {
       perror("failed to open serial port");
