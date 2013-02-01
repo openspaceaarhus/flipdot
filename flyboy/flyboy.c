@@ -14,6 +14,13 @@
 #include <sys/time.h>
 #include <math.h>
 
+//#define DEBUG
+#ifdef DEBUG
+#define debug_printf	printf
+#else
+#define debug_printf(f,...)
+#endif
+
 #define XSIZE	20
 #define YSIZE	120
 
@@ -23,11 +30,12 @@
 #define RAD(d)	((d)*M_PI/180.0)
 #define DEG(r)	((r)*180.0/M_PI)
 
-#define F1	17.0
-#define F2	11.0
+#define F1	2.22
+#define F2	3.33
 
-char backstore[XSIZE][YSIZE];
-char frontstore[XSIZE][YSIZE];
+char backstore[YSIZE][XSIZE];
+char frontstore[YSIZE][XSIZE];
+char wavestore[YSIZE][XSIZE];
 
 volatile int quit = 0;
 int pfd[0];
@@ -35,6 +43,7 @@ struct termios orig_termios;
 int posx = XSIZE/2;
 int posy = YSIZE/2;
 int explode;
+int wavey;
 
 #define BWIDTH	5
 #define BHEIGHT	10
@@ -54,9 +63,13 @@ const uint8_t boat[BWIDTH*BHEIGHT] = {
 
 #define sfpix(x,y,v)	do { \
 				if((x) >= 0 && (x) < XSIZE && (y) >= 0 && (y) < YSIZE) \
-					frontstore[(x)][(y)] = (v); \
+					frontstore[(y)][(x)] = (v); \
 			} while(0);
-#define iscol(x,y)	((x) >= 0 && (x) < XSIZE && (y) >= 0 && (y) < YSIZE && frontstore[(x)][(y)])
+#define swpix(x,y,v)	do { \
+				if((x) >= 0 && (x) < XSIZE && (y) >= 0 && (y) < YSIZE) \
+					wavestore[(y)][(x)] = (v); \
+			} while(0);
+#define iscol(x,y)	((x) >= 0 && (x) < XSIZE && (y) >= 0 && (y) < YSIZE && frontstore[(y)][(x)])
 
 #define NSHOT	25
 
@@ -64,6 +77,8 @@ int shotx[NSHOT];
 int shoty[NSHOT];
 double phase1;
 double phase2;
+double phoffs1;
+double phoffs2;
 
 
 int serial_open(const char *port)
@@ -158,12 +173,12 @@ void scr_pixel(int fd, int x, int y, int clr)
 {
 	clr = clr ? 1 : 0;
 	if(x >= 0 && x < XSIZE && y >= 0 && y < YSIZE) {
-		if(backstore[x][y] ^ clr) {
+		if(backstore[y][x] ^ clr) {
 			uint8_t buf[2];
 			buf[0] = x | (clr ? 0x80 : 0);
 			buf[1] = y;
 			xwrite(fd, buf, 2);
-			backstore[x][y] = clr;
+			backstore[y][x] = clr;
 		}
 	}
 }
@@ -174,7 +189,7 @@ void scr_frontmap(int fd)
 
 	for(y = 0; y < YSIZE; y++) {
 		for(x = 0; x < XSIZE; x++) {
-			scr_pixel(fd, x, y, frontstore[x][y]);
+			scr_pixel(fd, x, y, frontstore[y][x]);
 		}
 	}
 }
@@ -215,8 +230,52 @@ void put_shots(void)
 	for(i = 0; i < NSHOT; i++) {
 		if(shotx[i] > 0) {
 			sfpix(shotx[i], shoty[i], 1);
-			sfpix(shotx[i], shoty[i]-1, 1);
+			sfpix(shotx[i], shoty[i]+1, 1);
 			if(--shoty[i] < 0) {
+				shotx[i] = shoty[i] = -1;
+			}
+		}
+	}
+}
+
+void shoot_wave(void)
+{
+	int i;
+	for(i = 0; i < NSHOT; i++) {
+		if(shotx[i] > 0) {
+			if(wavestore[shoty[i]][shotx[i]]) {
+#if 0
+				swpix(shotx[i]-1, shoty[i]-2, 0);
+				swpix(shotx[i]+0, shoty[i]-2, 0);
+				swpix(shotx[i]+1, shoty[i]-2, 0);
+				swpix(shotx[i]-2, shoty[i]-1, 0);
+				swpix(shotx[i]-1, shoty[i]-1, 0);
+				swpix(shotx[i]+0, shoty[i]-1, 0);
+				swpix(shotx[i]+1, shoty[i]-1, 0);
+				swpix(shotx[i]+2, shoty[i]-1, 0);
+				swpix(shotx[i]-3, shoty[i]+0, 0);
+				swpix(shotx[i]-2, shoty[i]+0, 0);
+				swpix(shotx[i]-1, shoty[i]+0, 0);
+				swpix(shotx[i]+0, shoty[i]+0, 0);
+				swpix(shotx[i]+1, shoty[i]+0, 0);
+				swpix(shotx[i]+2, shoty[i]+0, 0);
+				swpix(shotx[i]+3, shoty[i]+0, 0);
+				swpix(shotx[i]-2, shoty[i]+1, 0);
+				swpix(shotx[i]-1, shoty[i]+1, 0);
+				swpix(shotx[i]+0, shoty[i]+1, 0);
+				swpix(shotx[i]+1, shoty[i]+1, 0);
+				swpix(shotx[i]+2, shoty[i]+1, 0);
+				swpix(shotx[i]-1, shoty[i]+2, 0);
+				swpix(shotx[i]+0, shoty[i]+2, 0);
+				swpix(shotx[i]+1, shoty[i]+2, 0);
+#else
+				int x, y;
+				for(x = -2; x <= 2; x++) {
+					for(y = -2; y <= 2; y++) {
+						swpix(shotx[i]+x, shoty[i]+y, 0);
+					}
+				}
+#endif
 				shotx[i] = shoty[i] = -1;
 			}
 		}
@@ -242,21 +301,28 @@ int put_boat(void)
 void put_border(void)
 {
 	double factor;
-	int x, y;
+	double p;
+	int x;
+
+	memmove(&wavestore[1][0], &wavestore[0][0], sizeof(wavestore) - XSIZE*sizeof(wavestore[0][0]));
+	memset(&wavestore[0][0], 0, XSIZE*sizeof(wavestore[0][0]));
 
 	factor = sin(phase1+phase2);
 	factor *= factor;
 	factor *= 15.0;
 	factor += 85.0;
 	factor /= 100.0;
-	for(y = 0; y < YSIZE; y++) {
-		double p = round(factor * (double)(XSIZE/2)/3.0 * (1.0 + sin(F1*y/(double)YSIZE + phase1)));
-		for(x = 0; x < p; x++)
-			sfpix(x, y, 1);
-		p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/3.0 * (1.0 + sin(F2*y/(double)YSIZE + phase2)));
-		for(x = 0; x < p; x++)
-			sfpix(XSIZE - x - 1, y, 1);
-	}
+#define BUMPSIZE	((rand() % 10000) < 100 ? 2.5 : 2.7)
+	//p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(F1*wavey/(double)YSIZE + phase1)));
+	p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase1)));
+	for(x = 0; x < p; x++)
+		wavestore[0][x] = 1;
+	//p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(F2*wavey/(double)YSIZE + phase2)));
+	p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase2)));
+	for(x = 0; x < p; x++)
+		wavestore[0][XSIZE - x - 1] = 1;
+
+	memcpy(frontstore, wavestore, sizeof(wavestore));
 }
 
 void put_explode(int n)
@@ -273,22 +339,32 @@ void put_explode(int n)
 
 void active_step(void)
 {
-	phase1 -= RAD(1.5);
-	phase2 -= RAD(6.0);
-	phase1 = fmod(phase1, M_2PI);
-	phase2 = fmod(phase2, M_2PI);
+	phase1 = M_2PI*F1*(double)wavey/(double)YSIZE - RAD(1.5) + phoffs1;
+	phase2 = M_2PI*F2*(double)wavey/(double)YSIZE - RAD(6.0) + phoffs2;
+	wavey = (wavey + 1) % YSIZE;
+	if(phase1 <= -M_2PI)
+		phase1 += M_2PI;
+	else if(phase1 >= M_2PI)
+		phase1 -= M_2PI;
+	if(phase2 <= -M_2PI)
+		phase2 += M_2PI;
+	else if(phase2 >= M_2PI)
+		phase2 -= M_2PI;
 }
 
 void reset_game(void)
 {
 	int i;
-	phase1 = phase2 = 0.0;
+	phoffs1 = M_2PI * (double)(rand() % 10000)/10000.0;
+	phoffs2 = M_2PI * (double)(rand() % 10000)/10000.0;
 	posx = XSIZE/2;
-	posy = YSIZE/2;
+	posy = 3*YSIZE/4;
 	explode = 0;
+	wavey = 0;
 	for(i = 0; i < NSHOT; i++) {
 		shotx[i] = shoty[i] = -1;
 	}
+	memset(wavestore, 0, sizeof(wavestore));
 }
 
 void reset_tty(void)
@@ -424,51 +500,50 @@ int main(int argc, char *argv[])
 					case 'A':
 						if(posy > BHEIGHT/2)
 							posy--;
-						printf("up\r\n");
+						debug_printf("up\r\n");
 						break;
 					case 'B':
 						if(posy < YSIZE-1 - (BHEIGHT+2))
 							posy++;
-						printf("down\r\n");
+						debug_printf("down\r\n");
 						break;
 					case 'D':
 						if(posx < XSIZE-1-BWIDTH/2)
 							posx++;
-						printf("right\r\n");
+						debug_printf("right\r\n");
 						break;
 					case 'C':
 						if(posx > BWIDTH/2)
 							posx--;
-						printf("left\r\n");
+						debug_printf("left\r\n");
 						break;
 					}
 				}
 				break;
 			case 't':
 				add_shot();
-				printf("LT\r\n");
+				debug_printf("LT\r\n");
 				break;
 			case 'z':
-				printf("RT\r\n");
+				debug_printf("RT\r\n");
 				break;
 			case 'g':
-				printf("LB\r\n");
+				debug_printf("LB\r\n");
 				break;
 			case 'x':
-				printf("RB\r\n");
+				debug_printf("RB\r\n");
 				break;
 			case '5':
-				printf("TT\r\n");
+				debug_printf("TT\r\n");
 				break;
 			case '6':
-				printf("BB\r\n");
+				debug_printf("BB\r\n");
 				break;
 			case '7':
-				printf("LL\r\n");
+				debug_printf("LL\r\n");
 				break;
 			case '8':
-				printf("RR\r\n");
-				break;
+				debug_printf("RR\r\n");
 				break;
 			case 'Q':
 				quit = 1;
@@ -492,6 +567,7 @@ int main(int argc, char *argv[])
 			} else {
 				put_border();
 				col = put_boat();
+				shoot_wave();
 				put_shots();
 				active_step();
 			}
