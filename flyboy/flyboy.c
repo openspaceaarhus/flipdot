@@ -26,6 +26,11 @@
 
 #define MAXEXPLODE	25
 
+#define DELAYTIMEMIN	50000
+#define DELAYTIMEMAX	250000
+#define DELAYTIMESTEP	100
+volatile int delaytime = DELAYTIMEMAX;
+
 #define M_2PI	(2.0*M_PI)
 #define RAD(d)	((d)*M_PI/180.0)
 #define DEG(r)	((r)*180.0/M_PI)
@@ -137,9 +142,13 @@ ssize_t xread(int fd, void *p, size_t n)
 void timer_start(void)
 {
 	struct itimerval itv;
-	itv.it_interval.tv_sec = itv.it_value.tv_sec = 0;
-	itv.it_interval.tv_usec = itv.it_value.tv_usec = 75000;
+	itv.it_interval.tv_sec = 0;
+	itv.it_interval.tv_usec = 0;
+	itv.it_value.tv_sec = 0;
+	itv.it_value.tv_usec = delaytime;
 	setitimer(ITIMER_REAL, &itv, NULL);
+	if(delaytime > DELAYTIMEMIN)
+		delaytime -= DELAYTIMESTEP;
 }
 
 void timer_stop(void)
@@ -298,29 +307,29 @@ int put_boat(void)
 	return col;
 }
 
-void put_border(void)
+void put_border(int move)
 {
 	double factor;
 	double p;
 	int x;
 
-	memmove(&wavestore[1][0], &wavestore[0][0], sizeof(wavestore) - XSIZE*sizeof(wavestore[0][0]));
-	memset(&wavestore[0][0], 0, XSIZE*sizeof(wavestore[0][0]));
+	if(move) {
+		memmove(&wavestore[1][0], &wavestore[0][0], sizeof(wavestore) - XSIZE*sizeof(wavestore[0][0]));
+		memset(&wavestore[0][0], 0, XSIZE*sizeof(wavestore[0][0]));
 
-	factor = sin(phase1+phase2);
-	factor *= factor;
-	factor *= 15.0;
-	factor += 85.0;
-	factor /= 100.0;
+		factor = sin(phase1+phase2);
+		factor *= factor;
+		factor *= 15.0;
+		factor += 85.0;
+		factor /= 100.0;
 #define BUMPSIZE	((rand() % 10000) < 100 ? 2.5 : 2.7)
-	//p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(F1*wavey/(double)YSIZE + phase1)));
-	p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase1)));
-	for(x = 0; x < p; x++)
-		wavestore[0][x] = 1;
-	//p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(F2*wavey/(double)YSIZE + phase2)));
-	p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase2)));
-	for(x = 0; x < p; x++)
-		wavestore[0][XSIZE - x - 1] = 1;
+		p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase1)));
+		for(x = 0; x < p; x++)
+			wavestore[0][x] = 1;
+		p = round((1.0 - (factor - 1.0)) * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase2)));
+		for(x = 0; x < p; x++)
+			wavestore[0][XSIZE - x - 1] = 1;
+	}
 
 	memcpy(frontstore, wavestore, sizeof(wavestore));
 }
@@ -357,10 +366,11 @@ void reset_game(void)
 	int i;
 	phoffs1 = M_2PI * (double)(rand() % 10000)/10000.0;
 	phoffs2 = M_2PI * (double)(rand() % 10000)/10000.0;
-	posx = XSIZE/2;
+	posx = XSIZE/2-1;
 	posy = 3*YSIZE/4;
 	explode = 0;
 	wavey = 0;
+	delaytime = DELAYTIMEMAX;
 	for(i = 0; i < NSHOT; i++) {
 		shotx[i] = shoty[i] = -1;
 	}
@@ -525,12 +535,15 @@ int main(int argc, char *argv[])
 				debug_printf("LT\r\n");
 				break;
 			case 'z':
+				add_shot();
 				debug_printf("RT\r\n");
 				break;
 			case 'g':
+				add_shot();
 				debug_printf("LB\r\n");
 				break;
 			case 'x':
+				add_shot();
 				debug_printf("RB\r\n");
 				break;
 			case '5':
@@ -552,6 +565,7 @@ int main(int argc, char *argv[])
 		}
 		if(FD_ISSET(pfd[0], &fds)) {
 			char c;
+			timer_start();
 			xread(pfd[0], &c, 1);
 			memset(frontstore, 0, sizeof(frontstore));
 			if(col) {
@@ -560,12 +574,13 @@ int main(int argc, char *argv[])
 					reset_game();
 					col = 0;
 				} else {
-					put_border();
+					delaytime = DELAYTIMEMIN;
+					put_border(0);
 					put_shots();
 					put_explode(explode++);
 				}
 			} else {
-				put_border();
+				put_border(1);
 				col = put_boat();
 				shoot_wave();
 				put_shots();
