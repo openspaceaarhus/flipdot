@@ -59,7 +59,7 @@ char frontstore[YSIZE][XSIZE];
 char wavestore[YSIZE][XSIZE];
 
 volatile int quit = 0;
-int pfd[0];
+int pfd[2];
 struct termios orig_termios;
 int posx = XSIZE/2;
 int posy = YSIZE/2;
@@ -67,6 +67,7 @@ int explode;
 int wavey;
 int resetstate;
 int explodestate;
+int bombtimeout;
 
 #define BWIDTH	5
 #define BHEIGHT	10
@@ -95,9 +96,12 @@ const uint8_t boat[BWIDTH*BHEIGHT] = {
 #define iscol(x,y)	((x) >= 0 && (x) < XSIZE && (y) >= 0 && (y) < YSIZE && frontstore[(y)][(x)])
 
 #define NSHOT	25
+#define NBOMB	2
 
 int shotx[NSHOT];
 int shoty[NSHOT];
+int bombx[NBOMB];
+int bomby[NBOMB];
 double phase1;
 double phase2;
 double phoffs1;
@@ -323,46 +327,106 @@ void put_shots(int animate)
 	}
 }
 
+#define BOMBSIZE	5
+#define BOMBCLEAR	11
+#define BOMBTIMEOUT	100
+
+const uint8_t bomb[BOMBSIZE*BOMBSIZE] = {
+	0, 0, 1, 0, 0,
+	0, 1, 1, 1, 0,
+	1, 1, 1, 1, 1,
+	0, 1, 1, 1, 0,
+	0, 0, 1, 0, 0,
+};
+
+const uint8_t bombclr[BOMBCLEAR*BOMBCLEAR] = {
+	0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
+	0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+	0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0,
+};
+
+void add_bomb(void)
+{
+	int i;
+	for(i = 0; i < NBOMB; i++) {
+		if(bombx[i] < 0) {
+			bombx[i] = posx;
+			bomby[i] = posy - BHEIGHT/2;
+			return;
+		}
+	}
+	bombtimeout = BOMBTIMEOUT;
+}
+
+void put_bombs(int animate)
+{
+	int i;
+	int x, y;
+	for(i = 0; i < NBOMB; i++) {
+		if(bombx[i] > 0) {
+			for(y = 0; y < BOMBSIZE; y++) {
+				for(x = 0; x < BOMBSIZE; x++) {
+					if(bomb[y*BOMBSIZE+x])
+						sfpix(bombx[i]+x-BOMBSIZE/2, bomby[i]+y-BOMBSIZE/2, 1);
+				}
+			}
+			if(animate) {
+				bomby[i] -= 2;
+				if(bomby[i] < 0) {
+					bombx[i] = bomby[i] = -1;
+				}
+			}
+		}
+	}
+}
+
 void shoot_wave(void)
 {
 	int i;
 	for(i = 0; i < NSHOT; i++) {
-		if(shotx[i] > 0) {
-			if(wavestore[shoty[i]][shotx[i]] || wavestore[shoty[i]+1][shotx[i]]) {
-#if 0
-				swpix(shotx[i]-1, shoty[i]-2, 0);
-				swpix(shotx[i]+0, shoty[i]-2, 0);
-				swpix(shotx[i]+1, shoty[i]-2, 0);
-				swpix(shotx[i]-2, shoty[i]-1, 0);
-				swpix(shotx[i]-1, shoty[i]-1, 0);
-				swpix(shotx[i]+0, shoty[i]-1, 0);
-				swpix(shotx[i]+1, shoty[i]-1, 0);
-				swpix(shotx[i]+2, shoty[i]-1, 0);
-				swpix(shotx[i]-3, shoty[i]+0, 0);
-				swpix(shotx[i]-2, shoty[i]+0, 0);
-				swpix(shotx[i]-1, shoty[i]+0, 0);
-				swpix(shotx[i]+0, shoty[i]+0, 0);
-				swpix(shotx[i]+1, shoty[i]+0, 0);
-				swpix(shotx[i]+2, shoty[i]+0, 0);
-				swpix(shotx[i]+3, shoty[i]+0, 0);
-				swpix(shotx[i]-2, shoty[i]+1, 0);
-				swpix(shotx[i]-1, shoty[i]+1, 0);
-				swpix(shotx[i]+0, shoty[i]+1, 0);
-				swpix(shotx[i]+1, shoty[i]+1, 0);
-				swpix(shotx[i]+2, shoty[i]+1, 0);
-				swpix(shotx[i]-1, shoty[i]+2, 0);
-				swpix(shotx[i]+0, shoty[i]+2, 0);
-				swpix(shotx[i]+1, shoty[i]+2, 0);
-#else
-				int x, y;
-				for(x = -2; x <= 2; x++) {
-					for(y = -2; y <= 2; y++) {
-						swpix(shotx[i]+x, shoty[i]+y, 0);
+		if(shotx[i] < 0)
+			continue;
+		if(wavestore[shoty[i]][shotx[i]] || wavestore[shoty[i]+1][shotx[i]]) {
+			int x, y;
+			for(x = -2; x <= 2; x++) {
+				for(y = -2; y <= 2; y++) {
+					swpix(shotx[i]+x, shoty[i]+y, 0);
+				}
+			}
+			shotx[i] = shoty[i] = -1;
+		}
+	}
+
+	for(i = 0; i < NBOMB; i++) {
+		int hit = 0;
+		int x, y;
+		if(bombx[i] < 0)
+			continue;
+		for(y = 0; y < BOMBSIZE; y++) {
+			for(x = 0; x < BOMBSIZE; x++) {
+				int px = bombx[i] + x - BOMBSIZE/2;
+				int py = bomby[i] + y - BOMBSIZE/2;
+				if(px >= 0 && px < XSIZE && py >= 0 && py < YSIZE)
+					hit += (bomb[y*BOMBSIZE+x] && wavestore[py][px]) ? 1 : 0;
+			}
+		}
+		if(hit) {
+			for(y = 0; y < BOMBCLEAR; y++) {
+				for(x = 0; x < BOMBCLEAR; x++) {
+					if(bombclr[y*BOMBCLEAR+x]) {
+						swpix(bombx[i]+x-BOMBCLEAR/2, bomby[i]+y-BOMBCLEAR/2, 0);
 					}
 				}
-#endif
-				shotx[i] = shoty[i] = -1;
 			}
+			bombx[i] = bomby[i] = -1;
 		}
 	}
 }
@@ -398,7 +462,7 @@ void put_border(int move)
 		factor *= 15.0;
 		factor += 85.0;
 		factor /= 100.0;
-#define BUMPSIZE	((rand() % 10000) < 100 ? 2.5 : 2.7)
+#define BUMPSIZE	((rand() % 10000) < 500 ? 2.3 : 2.7)
 		p = round(factor * (double)(XSIZE/2)/BUMPSIZE * (1.0 + sin(phase1)));
 		for(x = 0; x < p; x++)
 			wavestore[0][x] = 1;
@@ -449,8 +513,12 @@ void reset_game(void)
 	resetstate = 0;
 	explodestate = 0;
 	delaytime = DELAYTIMEMAX;
+	bombtimeout = 0;
 	for(i = 0; i < NSHOT; i++) {
 		shotx[i] = shoty[i] = -1;
+	}
+	for(i = 0; i < NBOMB; i++) {
+		bombx[i] = bomby[i] = -1;
 	}
 	memset(wavestore, 0, sizeof(wavestore));
 }
@@ -522,7 +590,7 @@ int main(int argc, char *argv[])
 		raw.c_cc[VTIME] = 0;
 
 		/* put terminal in raw mode after flushing */
-		if(tcsetattr(0,TCSAFLUSH,&raw) < 0) {
+		if(tcsetattr(0, TCSAFLUSH, &raw) < 0) {
 			perror("tcsetattr raw mode");
 			exit(1);
 		}
@@ -530,8 +598,8 @@ int main(int argc, char *argv[])
 	}
 
 	animate_clear(fd);
-	timer_start();
 	reset_game();
+	timer_start();
 
 	while(!quit) {
 		fd_set fds;
@@ -637,7 +705,10 @@ int main(int argc, char *argv[])
 					explodestate = 0;
 				break;
 			case '6':
+			case 'b':
 				debug_printf("BB\r\n");
+				if(!bombtimeout)
+					add_bomb();
 				if(resetstate == 1)
 					resetstate++;
 				else
@@ -672,6 +743,8 @@ int main(int argc, char *argv[])
 			char c;
 			timer_start();
 			xread(pfd[0], &c, 1);
+			if(bombtimeout)
+				bombtimeout--;
 			if(col) {
 				if(explode >= MAXEXPLODE) {
 					animate_clear(fd);
@@ -682,14 +755,16 @@ int main(int argc, char *argv[])
 					delaytime = DELAYTIMEMIN;
 					put_border(0);
 					put_shots(0);
+					put_bombs(0);
 					put_explode(explode++);
 				}
 			} else {
 				memset(frontstore, 0, sizeof(frontstore));
+				shoot_wave();
 				put_border(1);
 				col = put_boat();
-				shoot_wave();
 				put_shots(1);
+				put_bombs(1);
 				active_step();
 			}
 			scr_frontmap(fd);
