@@ -24,7 +24,7 @@
 #define XSIZE	20
 #define YSIZE	120
 
-#define MAXEXPLODE	25
+#define MAXEXPLODE	35
 
 #define DELAYTIMEMIN	50000
 #define DELAYTIMEMAX	250000
@@ -49,6 +49,8 @@ int posx = XSIZE/2;
 int posy = YSIZE/2;
 int explode;
 int wavey;
+int resetstate;
+int explodestate;
 
 #define BWIDTH	5
 #define BHEIGHT	10
@@ -158,26 +160,6 @@ void timer_stop(void)
 	setitimer(ITIMER_REAL, &itv, NULL);
 }
 
-void scr_clear(int fd, int tmr)
-{
-	int x, y;
-
-	memset(backstore, 0, sizeof(backstore));
-
-	if(tmr)
-		timer_stop();
-	for(y = 0; y < YSIZE; y++) {
-		for(x = 0; x < XSIZE; x++) {
-			uint8_t buf[2];
-			buf[0] = x;
-			buf[1] = y;
-			xwrite(fd, buf, 2);
-		}
-	}
-	if(tmr)
-		timer_start();
-}
-
 void scr_pixel(int fd, int x, int y, int clr)
 {
 	clr = clr ? 1 : 0;
@@ -200,6 +182,82 @@ void scr_frontmap(int fd)
 		for(x = 0; x < XSIZE; x++) {
 			scr_pixel(fd, x, y, frontstore[y][x]);
 		}
+	}
+}
+
+/* Bresenham line algorithm (from wikipedia) */
+void bh_line(int x0, int y0, int x1, int y1, int rf, int clr)
+{
+	int i;
+	int dx = abs(x1 - x0);
+	int dy = abs(y1 - y0);
+	int sx = x0 < x1 ? 1 : -1;
+	int sy = y0 < y1 ? 1 : -1;
+	int err = dx - dy;
+	int e2;
+
+	while(1) {
+		if(x0 <= -XSIZE || x0 >= 2*XSIZE || x1 <= -XSIZE || x1 >= 2*XSIZE) {
+			printf("X-coord out of range? (%d,%d) (%d,%d)\r\n", x0, y0, x1, y1);
+			return;
+		}
+		if(y0 <= -YSIZE || y0 >= 2*YSIZE || y1 <= -YSIZE || y1 >= 2*YSIZE) {
+			printf("Y-coord out of range? (%d,%d) (%d,%d)\r\n", x0, y0, x1, y1);
+			return;
+		}
+		/* setPixel(x0,y0) */
+		if(rf) {
+			for(i = x0; i < XSIZE; i++)
+				sfpix(i, y0, clr);
+		} else {
+			for(i = x0; i >= 0; i--)
+				sfpix(i, y0, clr);
+		}
+		if(x0 == x1 && y0 == y1)
+			break;
+		e2 = 2*err;
+		if(e2 > -dy) {
+			err -= dy;
+			x0 += sx;
+		}
+		if(e2 < dx) {
+			err += dx;
+			y0 += sy;
+		}
+	}
+}
+
+void animate_clear(int fd)
+{
+	int x, y;
+	for(y = 0; y < YSIZE/2; y++) {
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-1, YSIZE/2+y-1, 1, 1);
+		bh_line(XSIZE/2, YSIZE/2, 0,       YSIZE/2+y-1, 0, 1);
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-1, YSIZE/2-y,   1, 1);
+		bh_line(XSIZE/2, YSIZE/2, 0,       YSIZE/2-y,   0, 1);
+		scr_frontmap(fd);
+	}
+	for(x = 0; x < XSIZE/2; x++) {
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-x-1, YSIZE-1, 1, 1);
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-x-1, 0,       1, 1);
+		bh_line(XSIZE/2, YSIZE/2, x,         YSIZE-1, 0, 1);
+		bh_line(XSIZE/2, YSIZE/2, x,         0,       0, 1);
+		scr_frontmap(fd);
+	}
+
+	for(y = 0; y < YSIZE/2; y++) {
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-1, YSIZE/2+y-1, 1, 0);
+		bh_line(XSIZE/2, YSIZE/2, 0,       YSIZE/2+y-1, 0, 0);
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-1, YSIZE/2-y,   1, 0);
+		bh_line(XSIZE/2, YSIZE/2, 0,       YSIZE/2-y,   0, 0);
+		scr_frontmap(fd);
+	}
+	for(x = 0; x < XSIZE/2; x++) {
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-x-1, YSIZE-1, 1, 0);
+		bh_line(XSIZE/2, YSIZE/2, XSIZE-x-1, 0,       1, 0);
+		bh_line(XSIZE/2, YSIZE/2, x,         YSIZE-1, 0, 0);
+		bh_line(XSIZE/2, YSIZE/2, x,         0,       0, 0);
+		scr_frontmap(fd);
 	}
 }
 
@@ -227,21 +285,23 @@ void add_shot(void)
 	for(i = 0; i < NSHOT; i++) {
 		if(shotx[i] < 0) {
 			shotx[i] = posx;
-			shoty[i] = posy;
+			shoty[i] = posy - BHEIGHT/2;
 			return;
 		}
 	}
 }
 
-void put_shots(void)
+void put_shots(int animate)
 {
 	int i;
 	for(i = 0; i < NSHOT; i++) {
 		if(shotx[i] > 0) {
 			sfpix(shotx[i], shoty[i], 1);
 			sfpix(shotx[i], shoty[i]+1, 1);
-			if(--shoty[i] < 0) {
-				shotx[i] = shoty[i] = -1;
+			if(animate) {
+				if(--shoty[i] < 0) {
+					shotx[i] = shoty[i] = -1;
+				}
 			}
 		}
 	}
@@ -252,7 +312,7 @@ void shoot_wave(void)
 	int i;
 	for(i = 0; i < NSHOT; i++) {
 		if(shotx[i] > 0) {
-			if(wavestore[shoty[i]][shotx[i]]) {
+			if(wavestore[shoty[i]][shotx[i]] || wavestore[shoty[i]+1][shotx[i]]) {
 #if 0
 				swpix(shotx[i]-1, shoty[i]-2, 0);
 				swpix(shotx[i]+0, shoty[i]-2, 0);
@@ -370,6 +430,8 @@ void reset_game(void)
 	posy = 3*YSIZE/4;
 	explode = 0;
 	wavey = 0;
+	resetstate = 0;
+	explodestate = 0;
 	delaytime = DELAYTIMEMAX;
 	for(i = 0; i < NSHOT; i++) {
 		shotx[i] = shoty[i] = -1;
@@ -429,6 +491,7 @@ int main(int argc, char *argv[])
 	if((fd = serial_open(serial_port)) < 0)
 		exit(1);
 
+	/* save the original terminal setup to restore at exit */
 	if(tcgetattr(0,&orig_termios) < 0) {
 		perror("tcgetattr terminal");
 		exit(1);
@@ -437,29 +500,10 @@ int main(int argc, char *argv[])
 	if(isatty(0)) {
 		struct termios raw;
 
-		raw = orig_termios;  /* copy original and then modify below */
-
-		/* input modes - clear indicated ones giving: no break, no CR to NL, 
-		no parity check, no strip char, no start/stop output (sic) control */
-		raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-
-		/* output modes - clear giving: no post processing such as NL to CR+NL */
-		raw.c_oflag &= ~(OPOST);
-		raw.c_oflag |= ONLCR;	/* add CR to NL */
-
-		/* control modes - set 8 bit chars */
-		raw.c_cflag |= (CS8);
-
-		/* local modes - clear giving: echoing off, canonical off (no erase with 
-		backspace, ^U,...),  no extended functions, no signal chars (^Z,^C) */
-		raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-
-		/* control chars - set return condition: min number of bytes and timer */
-		raw.c_cc[VMIN] = 5; raw.c_cc[VTIME] = 8; /* after 5 bytes or .8 seconds
-							after first byte seen      */
-		raw.c_cc[VMIN] = 0; raw.c_cc[VTIME] = 0; /* immediate - anything       */
-		raw.c_cc[VMIN] = 2; raw.c_cc[VTIME] = 0; /* after two bytes, no timer  */
-		raw.c_cc[VMIN] = 0; raw.c_cc[VTIME] = 8; /* after a byte or .8 seconds */
+		raw = orig_termios;
+		cfmakeraw(&raw);
+		raw.c_cc[VMIN] = 0;
+		raw.c_cc[VTIME] = 0;
 
 		/* put terminal in raw mode after flushing */
 		if(tcsetattr(0,TCSAFLUSH,&raw) < 0) {
@@ -469,7 +513,7 @@ int main(int argc, char *argv[])
 		atexit(reset_tty);
 	}
 
-	scr_clear(fd, 0);
+	animate_clear(fd);
 	timer_start();
 	reset_game();
 
@@ -486,7 +530,14 @@ int main(int argc, char *argv[])
 		}
 		if(FD_ISSET(0, &fds)) {
 			char c;
-			xread(0, &c, 1);
+			ssize_t n = xread(0, &c, 1);
+			if(-1 == n) {
+				perror("read char");
+				exit(1);
+			} else if(!n) {
+				fprintf(stderr, "Serial port closed on me...\r\n");
+				exit(1);
+			}
 /*
  * up		ESC [ A
  * down		ESC [ B
@@ -508,22 +559,22 @@ int main(int argc, char *argv[])
 					xread(0, &c, 1);
 					switch(c) {
 					case 'A':
-						if(posy > BHEIGHT/2)
+						if(!explode && posy > BHEIGHT/2)
 							posy--;
 						debug_printf("up\r\n");
 						break;
 					case 'B':
-						if(posy < YSIZE-1 - (BHEIGHT+2))
+						if(!explode && posy < YSIZE-1 - (BHEIGHT/2))
 							posy++;
 						debug_printf("down\r\n");
 						break;
 					case 'D':
-						if(posx < XSIZE-1-BWIDTH/2)
+						if(!explode && posx < XSIZE-1-BWIDTH/2)
 							posx++;
 						debug_printf("right\r\n");
 						break;
 					case 'C':
-						if(posx > BWIDTH/2)
+						if(!explode && posx > BWIDTH/2)
 							posx--;
 						debug_printf("left\r\n");
 						break;
@@ -531,32 +582,70 @@ int main(int argc, char *argv[])
 				}
 				break;
 			case 't':
+			case ' ':
 				add_shot();
+				resetstate = 0;
+				explodestate = 0;
 				debug_printf("LT\r\n");
 				break;
 			case 'z':
 				add_shot();
+				resetstate = 0;
+				explodestate = 0;
 				debug_printf("RT\r\n");
 				break;
 			case 'g':
 				add_shot();
+				resetstate = 0;
+				explodestate = 0;
 				debug_printf("LB\r\n");
 				break;
 			case 'x':
 				add_shot();
+				resetstate = 0;
+				explodestate = 0;
 				debug_printf("RB\r\n");
 				break;
 			case '5':
 				debug_printf("TT\r\n");
+				if(resetstate == 0)
+					resetstate++;
+				else if(resetstate == 2) {
+					col = 1;
+					explode = MAXEXPLODE;
+				} else
+					resetstate = 0;
+				if(explodestate == 0)
+					explodestate = 1;
+				else
+					explodestate = 0;
 				break;
 			case '6':
 				debug_printf("BB\r\n");
+				if(resetstate == 1)
+					resetstate++;
+				else
+					resetstate = 0;
+				if(explodestate == 1)
+					explodestate = 2;
+				else
+					explodestate = 0;
 				break;
 			case '7':
 				debug_printf("LL\r\n");
+				resetstate = 0;
+				if(explodestate == 2)
+					explodestate = 3;
+				else
+					explodestate = 0;
 				break;
 			case '8':
 				debug_printf("RR\r\n");
+				resetstate = 0;
+				if(explodestate == 3) {
+					col = 1;
+				} else
+					explodestate = 0;
 				break;
 			case 'Q':
 				quit = 1;
@@ -567,23 +656,24 @@ int main(int argc, char *argv[])
 			char c;
 			timer_start();
 			xread(pfd[0], &c, 1);
-			memset(frontstore, 0, sizeof(frontstore));
 			if(col) {
 				if(explode >= MAXEXPLODE) {
-					scr_clear(fd, 1);
+					animate_clear(fd);
 					reset_game();
 					col = 0;
 				} else {
+					memset(frontstore, 0, sizeof(frontstore));
 					delaytime = DELAYTIMEMIN;
 					put_border(0);
-					put_shots();
+					put_shots(0);
 					put_explode(explode++);
 				}
 			} else {
+				memset(frontstore, 0, sizeof(frontstore));
 				put_border(1);
 				col = put_boat();
 				shoot_wave();
-				put_shots();
+				put_shots(1);
 				active_step();
 			}
 			scr_frontmap(fd);
@@ -591,12 +681,6 @@ int main(int argc, char *argv[])
 	}
 
 	timer_stop();
-#if 0
-	for(i = 0; !quit && i < 1000000; i++) {
-		scr_pixel(fd, rand() % XSIZE, rand() % YSIZE, rand() & 1);
-	}
-#endif
-
 	close(fd);
 	return 0;
 }
