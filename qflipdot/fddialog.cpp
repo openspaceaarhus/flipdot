@@ -13,6 +13,7 @@
 
 #define XSIZE	20
 #define YSIZE	120
+#define PPMS	3	/* Pixels per millisecond drawn */
 
 #define FIFOPATH	"./tty_interface"
 
@@ -46,10 +47,11 @@ FlipdotDialog::FlipdotDialog()
 	setLayout(mainLayout);
 
 	fifostate = 0;
+	ppms = PPMS;
 
-	QTimer *timer = new QTimer(this);
-	connect(timer, SIGNAL(timeout()), flipdot, SLOT(update()));
-	timer->start(20);
+	limittimer = new QTimer(this);
+	limittimer->setSingleShot(true);
+	connect(limittimer, SIGNAL(timeout()), this, SLOT(throttle()));
 }
 
 FlipdotDialog::~FlipdotDialog()
@@ -69,6 +71,11 @@ void FlipdotDialog::reopen_fifo(void)
 	}
 	sn = new QSocketNotifier(fifofd, QSocketNotifier::Read);
 	connect(sn, SIGNAL(activated(int)), this, SLOT(fifoHandler(int)));
+	sn->setEnabled(true);
+}
+
+void FlipdotDialog::throttle()
+{
 	sn->setEnabled(true);
 }
 
@@ -98,7 +105,13 @@ retry:
 			return;
 		}
 		fifostate = 0;
-		flipdot->setPixel(fifoc1 & 0x7f, c2, fifoc1 & 0x80, false);
+		//flipdot->setPixel(fifoc1 & 0x7f, c2, fifoc1 & 0x80, false);
+		flipdot->setPixel(fifoc1 & 0x7f, c2, fifoc1 & 0x80, true);
+		if(!--ppms) {
+			limittimer->start(1);
+			ppms = PPMS;
+			return;	/* Don't re-enable notifier before timeout */
+		}
 	} else {
 		fifostate = 0;
 	}

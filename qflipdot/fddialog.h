@@ -5,6 +5,7 @@
 
 class QFlipDot;
 class QSocketNotifier;
+class QTimer;
 
 class FlipdotDialog : public QDialog
 {
@@ -16,15 +17,18 @@ public:
 
 private slots:
 	void fifoHandler(int fd);
+	void throttle();
 
 private:
 	void reopen_fifo(void);
 
 	QFlipDot	*flipdot;
 	QSocketNotifier	*sn;
+	QTimer		*limittimer;
 	int		fifofd;
 	int		fifostate;
 	char		fifoc1;
+	int		ppms;
 };
 
 #endif

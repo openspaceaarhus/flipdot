@@ -1,0 +1,32 @@
+Flipdot simulator
+-----------------
+
+Creates a flipdot screen of 20x120 flipdots and is controlled as the OSAA
+flipdot controller. The interface is a fifo (named pipe), which is created in
+the current directory (where you start the simulator) under the name
+"tty_interface".
+
+The simulator limits the number of flips per second to about 3000 to simulate
+real-world limitations of the hardware.
+
+
+Usage
+-----
+- start the simulator in the background
+	$ ./qflipdot &
+- run flyboy (or any other app you make)
+	$ ../flyboy/flyboy ./tty_interface
+
+Attaching and detaching from the fifo is handled by the simulator. No need to
+restart the simulator if the driving app is restarted.
+
+
+Protocol
+--------
+- two bytes are read on the fifo for each pixel
+	* byte 1 - X-coordinate + on/off in bit 7
+	* byte 2 - Y-coordinate
+- coordinates are zero-based
+
+If you run the the bytes out of sequence, anything may happen, just not what
+you expect.
