@@ -1,4 +1,17 @@
 
-CFLAGS=-Wall -O2 -lm
+CFLAGS=-Wall -O2 -g
+LIBS=-lm
 
-flyboy: flyboy.c
+SRCS=\
+	flyboy.c
+
+OBJS=$(SRCS:.c=.o)
+
+
+flyboy: $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $+ $(LIBS)
+
+flyboy.o: flyboy.c
+
+clean::
+	$(RM) flyboy $(OBJS)
