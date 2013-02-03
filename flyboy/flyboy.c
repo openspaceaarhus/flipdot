@@ -329,7 +329,7 @@ void put_shots(int animate)
 
 #define BOMBSIZE	5
 #define BOMBCLEAR	11
-#define BOMBTIMEOUT	100
+#define BOMBTIMEOUT	15
 
 const uint8_t bomb[BOMBSIZE*BOMBSIZE] = {
 	0, 0, 1, 0, 0,
@@ -360,10 +360,10 @@ void add_bomb(void)
 		if(bombx[i] < 0) {
 			bombx[i] = posx;
 			bomby[i] = posy - BHEIGHT/2;
+			bombtimeout += BOMBTIMEOUT;
 			return;
 		}
 	}
-	bombtimeout = BOMBTIMEOUT;
 }
 
 void put_bombs(int animate)
