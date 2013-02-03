@@ -1,0 +1,22 @@
+FlyBoy flight simulator
+-----------------------
+
+A very simple fly-the-ship-through-the-maze game.
+
+Works on the flipdot controller.
+
+Controls (input to terminal):
+	- movement: arrows left, right, up, down
+	- shoot: 't', 'z', 'g', 'q' (or ' ')
+	- quit: 'Q'
+	- instant reset: '565'
+	- explode: '5678'
+
+Usage:
+	$ ./flyboy /dev/ttyACM0
+
+(or whatever tty device got attached)
+
+For use with the flipdot-simulator:
+- start the simulator
+- use the "tty_interface" fifo in the directory where the simulator is started
