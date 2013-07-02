@@ -34,6 +34,11 @@ upload: blink.hex
 verify: blink.hex
 	sudo $(AVRDUDE) -c $(PROTOCOL) -p $(PART) -P $(PORT) -b $(BAUD) -U flash:v:$<
 
+fuses:
+	sudo $(AVRDUDE) -c $(PROTOCOL) -p $(PART) -P $(PORT) -b $(BAUD) -B 100 -U hfuse:w:0xdf:m
+	sudo $(AVRDUDE) -c $(PROTOCOL) -p $(PART) -P $(PORT) -b $(BAUD) -B 100 -U lfuse:w:0xe2:m
+	sudo $(AVRDUDE) -c $(PROTOCOL) -p $(PART) -P $(PORT) -b $(BAUD) -B 100 -U efuse:w:0x1:m
+
 %.elf: %.s ; $(CC) $(CFLAGS) -s -o $@ $<
 
 %.s: %.c ; $(CC) $(CFLAGS) -S -o $@ $<
