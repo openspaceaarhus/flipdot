@@ -6,11 +6,12 @@ import random
 import math
 import sys
 from cStringIO import StringIO
+#from io import StringIO
 import socket
 
 #try:
 ser = serial.Serial(
-    port='COM7',
+    port='/dev/ttyACM0',
     baudrate=38400
 )
 #except Exception,e:
@@ -165,8 +166,8 @@ def Cube():
         t += 1
 
 
-GameOfLife()
-#Metaballs()
+#GameOfLife()
+Metaballs()
 #Cube()
 
 ser.close()

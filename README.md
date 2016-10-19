@@ -7,4 +7,5 @@ flipdot
 - flyboy	- Flight simulator (ha!)
 - qflipdot	- Flipdot screen simulator
 - tetris	- simple-tetris-clone, see: http://code.google.com/p/simple-tetris-clone/
+- flipmpos      - flip(dot control via we)mos
 
