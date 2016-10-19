@@ -18,6 +18,7 @@ const char* password = "deadbeef42";
 const int SIGN_W = 20;
 const int SIGN_H = 112;
 
+
 ESP8266WebServer server(80);
 
 const int led = 13;
@@ -25,18 +26,47 @@ const int led = 13;
 void plot(char x, char y, char on) {
   Serial.write((x & 0x7F) | on << 7);
   Serial.write(y);
+  // wrap wemos display to show full screen in a manner
+  if ( y > SSD1306_LCDWIDTH ) {
+    y -= SSD1306_LCDWIDTH;
+    x += SIGN_W + 2;
+  }
   display.drawPixel(y, x, on ? WHITE : BLACK);
+}
+
+void drawRect(int x0, int y0, int w, int h, char on) {
+  for (int j = 0; j < h ; j++) {
+    for (int i = 0; i < w ; i++) {
+      plot(x0 + i, y0 +j, on);
+    }
+  }
+}
+
+void fillDots(char on) {
+  drawRect(0, 0, SIGN_W, SIGN_H, on);
   display.display();
 }
+void resetFlipDots() {
+  for(int i = 0; i < 5; i++) {
+    fillDots(0);
+    display.display();
+    delay(100);
+    fillDots(1);
+    display.display();
+    delay(100);
+}
+  server.send(200, "text/plain", "Display was blinked");
+}
+
 
 void heartbeat(int x) {
   for (int y = 0; y < SIGN_H; y++) {
-      plot(x,y,1);
+    plot(x,y,1);
   }
   display.display();
   delay(100);
   for (int y = 0; y < SIGN_H; y++) {
-      plot(x,y,0);
+    plot(x,y,0);
   }
   display.display();
 }
@@ -117,9 +147,7 @@ void setup(void){
 
   server.on("/", handleRoot);
 
-  server.on("/inline", [](){
-                         server.send(200, "text/plain", "this works as well");
-                       });
+  server.on("/reset", resetFlipDots);
 
   server.onNotFound(handleNotFound);
 
