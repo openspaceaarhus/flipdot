@@ -16,6 +16,8 @@
  */
 #include <QtGui>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
 #include <QSocketNotifier>
 
 #include <unistd.h>
