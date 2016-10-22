@@ -7,8 +7,12 @@
 #include <Adafruit_SSD1306.h>
 #include <SPI.h>
 #include <Wire.h>
-
 #include <bitset>
+
+
+#include "Config.h"
+#include "FlipDot.h"
+
 
 // SCL GPIO5
 // SDA GPIO4
@@ -16,78 +20,12 @@
 #define OLED_RESET 0               // GPIO0
 Adafruit_SSD1306 oled(OLED_RESET); // will often mirror the expected content of
                                    // the flipdot display
-
-const char *ssid = "osaa-g";
-const char *password = "deadbeef42";
-
-const int SIGN_W = 112;
-const int SIGN_H = 20;
-
+FlipDot<Adafruit_SSD1306> flipDot(oled);
 ESP8266WebServer server(80);
 const int led = 13; // blinks sometimes
 
-class FlipDot : public Adafruit_GFX {
-public:
-  FlipDot() : Adafruit_GFX(SIGN_W, SIGN_H) {
-    framebuffer.reset();
-    currentDisplay.set();
-    display();
-  };
-  void drawPixel(int16_t x, int16_t y, uint16_t color) override {
-    int idx = y * width() + x;
-    framebuffer[idx] = (color != 0);
-  }
-
-  /// send changes to display
-  void display() {
-    for (int j = 0; j < height(); j++) {
-      for (int i = 0; i < width(); i++) {
-        int idx = j * width() + i;
-        if (framebuffer[idx] != currentDisplay[idx])
-          plot(i, j, framebuffer[idx]);
-      }
-    }
-    currentDisplay = framebuffer;
-    oled.display();
-  }
-
-  void invert() { framebuffer.flip(); }
-
-private:
-  void plot(char x, char y, char on) {
-    /// the display is coded so the x axis is the short axis, but is mounted in a horisontal
-    /// position essentially flipping the axis. For sanity this is the only place we do the
-    /// flippiing.
-    Serial.write((y & 0x7F) | on << 7);
-    Serial.write(x);
-    // wrap wemos display to show full screen in a manner
-    if (x > SSD1306_LCDWIDTH) {
-      x -= SSD1306_LCDWIDTH;
-      y += SIGN_H + 2;
-    }
-    oled.drawPixel(x, y, on ? WHITE : BLACK);
-  }
-
-  std::bitset<SIGN_W * SIGN_H> framebuffer;
-  std::bitset<SIGN_W * SIGN_H> currentDisplay;
-};
-
-FlipDot flipDot;
-
 void resetFlipDots() {
-  flipDot.fillScreen(0);
-  flipDot.setTextSize(2);
-  flipDot.setCursor(20, 2);
-  flipDot.setTextColor(WHITE);
-  flipDot.println("BLINK");
-
-  for (int i = 0; i < 10; i++) {
-    flipDot.display();
-    delay(10);
-    flipDot.invert();
-  }
-  flipDot.fillScreen(0);
-  flipDot.display();
+  flipDot.reset();
   server.send(200, "text/plain", "Display was blinked");
 }
 
@@ -128,7 +66,7 @@ void setup(void) {
   pinMode(led, OUTPUT);
   digitalWrite(led, 0);
   Serial.begin(38400);
-  WiFi.begin(ssid, password);
+  WiFi.begin(SSID, PASSWORD);
   Serial.println("");
   oled.begin(SSD1306_SWITCHCAPVCC,
              0x3C); // initialize with the I2C addr 0x3C (for the 64x48)
@@ -138,7 +76,7 @@ void setup(void) {
   oled.setTextColor(WHITE);
 
   oled.println("Connect to");
-  oled.println(ssid);
+  oled.println(SSID);
 
   oled.display();
   // Wait for connection
@@ -146,7 +84,7 @@ void setup(void) {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     oled.println("Connect to");
-    oled.println(ssid);
+    oled.println(SSID);
 
     for (int i = 0; i < SSD1306_LCDWIDTH; i++)
       oled.drawPixel(i, SSD1306_LCDHEIGHT - 1, (i < idx) ? WHITE : BLACK);
@@ -156,15 +94,13 @@ void setup(void) {
   }
 
   oled.clearDisplay();
-  /* oled.print("Connected to "); */
-  /* oled.println(ssid); */
   oled.setCursor(0, 12);
   oled.print("IP address: ");
   oled.setCursor(0, 24);
   oled.println(WiFi.localIP());
   oled.display();
 
-  if (MDNS.begin("esp8266")) {
+  if (MDNS.begin(MDNS_NAME)) {
     // Serial.println("MDNS responder started");
   }
 

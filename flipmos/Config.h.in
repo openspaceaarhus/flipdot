@@ -1,0 +1,11 @@
+#ifndef CONFIG_H_
+#define CONFIG_H_
+
+#define SIGN_W 112
+#define SIGN_H  20
+
+#define SSID "@SSID@"
+#define PASSWORD "@PASSWORD@"
+#define MDNS_NAME "@MDNS_NAME@"
+
+#endif /* !CONFIG_H_ */
