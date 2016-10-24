@@ -41,7 +41,7 @@ void handleRoot() {
     server.send(200, "text/plain", "Dots were flipped");
   } else {
     server.send(403, "text/plain",
-                "I am afraid, I can not let you do that dave");
+                "I'm sorry Dave, I'm Afraid I can't do that");
   }
 }
 
