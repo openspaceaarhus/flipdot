@@ -7,7 +7,9 @@
 #include <Adafruit_SSD1306.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <algorithm>
 #include <bitset>
+
 
 
 #include "Config.h"
@@ -62,6 +64,28 @@ void handleNotFound() {
   digitalWrite(led, 0);
 }
 
+void handleSay() {
+
+  String text = "";
+  unsigned char x = 0, y = 0, color = 0, size = 1, text_color =1;
+
+  for (uint8_t i = 0; i < server.args(); i++) {
+    const auto &name = server.argName(i);
+    const auto &arg = server.arg(i);
+    if (name == "text") text = arg;
+    if (name == "x") x = arg.toInt();
+    if (name == "y") y = arg.toInt();
+    if (name == "size") size = arg.toInt();
+    if (name == "color") text_color = arg.toInt();
+  }
+  flipDot.setTextColor(text_color ? WHITE : BLACK);
+  flipDot.setCursor(x, y);
+  flipDot.setTextSize(size);
+  flipDot.println(text);
+  flipDot.display();
+  server.send(200, "text/plain", "flipped");
+}
+
 void setup(void) {
   pinMode(led, OUTPUT);
   digitalWrite(led, 0);
@@ -105,7 +129,20 @@ void setup(void) {
   }
 
   server.on("/", handleRoot);
+  server.on("/say", handleSay);
+
   server.on("/reset", resetFlipDots);
+  server.on("/fill", [flipDot, server]() {
+    flipDot.fillScreen(1);
+    flipDot.display();
+    server.send(200, "text/plain", "Display was filled");
+  });
+  server.on("/clear", [flipDot, server]() {
+    flipDot.fillScreen(0);
+    flipDot.display();
+    server.send(200, "text/plain", "Display was cleared");
+  });
+
   server.on("/invert", [flipDot, server]() {
     flipDot.invert();
     flipDot.display();
