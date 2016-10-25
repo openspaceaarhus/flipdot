@@ -65,7 +65,7 @@ private:
     Serial.write(x);
   }
   void plot(char x, char y, char on) {
-    sendpixel(x, y, 0);
+    sendpixel(x, y, on);
     // wrap (wemos) display to show full screen in a manner
     if (x > mirror.width()) {
       x -= mirror.width();
