@@ -67,7 +67,7 @@ void handleNotFound() {
 void handleSay() {
 
   String text = "";
-  unsigned char x = 0, y = 0, color = 0, size = 1, text_color =1;
+  unsigned char x = 0, y = 0, color = 0, size = 1, text_color = 1, clear = 1;
 
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
@@ -77,7 +77,10 @@ void handleSay() {
     if (name == "y") y = arg.toInt();
     if (name == "size") size = arg.toInt();
     if (name == "color") text_color = arg.toInt();
+    if (name == "clear") clear = arg.toInt();
   }
+  if (clear)
+    flipDot.fillScreen(text_color ? BLACK : WHITE);
   flipDot.setTextColor(text_color ? WHITE : BLACK);
   flipDot.setCursor(x, y);
   flipDot.setTextSize(size);
