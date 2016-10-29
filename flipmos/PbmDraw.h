@@ -31,22 +31,33 @@ public:
     return true;
   }
 
-  void blit(int x, int y) {
+  bool blit(int x, int y) {
     if (Type::P4 == type) {
-      blitP4(x,y);
+      return blitP4(x,y);
     } else {
-      blitP1(x,y);
+      return blitP1(x,y);
     }
   }
   int w, h;
 private:
-  void blitP4(int x, int y) {
+
+  bool blitP4(int x, int y) {
+    int bit = 8;
+    char byte = '\0';
     for (int j = 0; j < h; j++) {
+      if (bit != 0) bit = 8;    // ignore partial read bytes on row change
       for (int i = 0; i < w; i++) {
         int idx = j * w + i;
-        //        flipdot.drawPixel(i + x, j + y, c & magic);
+        if (8 == bit) {
+          byte = file.read();
+          bit = 0;
+          if (-1 == byte) return false;
+        }
+        flipdot.drawPixel(i + x, j + y, (byte >> (7-bit)) & 0x1);
+        bit++;
       }
     }
+    return true;
   }
 
   bool blitP1(int x, int y) {

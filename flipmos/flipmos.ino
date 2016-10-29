@@ -254,6 +254,7 @@ void setup(void) {
     server.send(200, "text/plain", "Display was filled");
   });
   server.on("/clear", [flipDot, server]() {
+    oled.clearDisplay();
     flipDot.fillScreen(0);
     flipDot.display();
     server.send(200, "text/plain", "Display was cleared");
