@@ -120,6 +120,7 @@ void handleShow() {
     server.send(501, "text/plain", "Could not open file");
     return;
   }
+
   PbmDraw<FlipDot_t> pbm(flipDot, f);
 
   int chukSize = 512;
@@ -127,6 +128,19 @@ void handleShow() {
     server.send(501, "text/plain", "Could not read Header");
     return;
   }
+
+  if (server.hasArg("dump")) {
+    auto msg = f.readString();
+    msg += "\n\n\t";
+    msg += pbm.w;
+    msg += "x";
+    msg += pbm.h;
+
+    server.send(200, "text/plain", msg);
+    f.close();
+    return;
+  }
+
   pbm.blit(0, 0);
   int flipped = flipDot.display();
   String res = "Flipped bits for:";

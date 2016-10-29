@@ -25,7 +25,7 @@ public:
     while ('#' == line[0]) {
       line = file.readStringUntil('\n');
     }
-
+    line = file.readStringUntil('\n');
     w = file.parseInt();
     h = file.parseInt();
     return true;
@@ -38,7 +38,7 @@ public:
       blitP1(x,y);
     }
   }
-
+  int w, h;
 private:
   void blitP4(int x, int y) {
     for (int j = 0; j < h; j++) {
@@ -67,7 +67,6 @@ private:
   }
 
   Type type;
-  int w, h;
   File &file;
   FlipDotDisplay &flipdot;
 };
