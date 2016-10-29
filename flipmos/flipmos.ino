@@ -5,16 +5,13 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <SPI.h>
-#include <Wire.h>
+#include <FS.h>
 #include <algorithm>
 #include <bitset>
 
-
-
 #include "Config.h"
 #include "FlipDot.h"
-
+#include "PbmDraw.h"
 
 // SCL GPIO5
 // SDA GPIO4
@@ -22,9 +19,14 @@
 #define OLED_RESET 0               // GPIO0
 Adafruit_SSD1306 oled(OLED_RESET); // will often mirror the expected content of
                                    // the flipdot display
-FlipDot<Adafruit_SSD1306> flipDot(oled);
+
+typedef FlipDot<Adafruit_SSD1306> FlipDot_t;
+FlipDot_t flipDot(oled);
 ESP8266WebServer server(80);
 const int led = 13; // blinks sometimes
+
+// holds the current upload
+File fsUploadFile;
 
 void resetFlipDots() {
   flipDot.reset();
@@ -72,12 +74,18 @@ void handleSay() {
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
     const auto &arg = server.arg(i);
-    if (name == "text") text = arg;
-    if (name == "x") x = arg.toInt();
-    if (name == "y") y = arg.toInt();
-    if (name == "size") size = arg.toInt();
-    if (name == "color") text_color = arg.toInt();
-    if (name == "clear") clear = arg.toInt();
+    if (name == "text")
+      text = arg;
+    if (name == "x")
+      x = arg.toInt();
+    if (name == "y")
+      y = arg.toInt();
+    if (name == "size")
+      size = arg.toInt();
+    if (name == "color")
+      text_color = arg.toInt();
+    if (name == "clear")
+      clear = arg.toInt();
   }
   if (clear)
     flipDot.fillScreen(text_color ? BLACK : WHITE);
@@ -89,7 +97,98 @@ void handleSay() {
   server.send(200, "text/plain", "flipped");
 }
 
+void handleShow() {
+  int x = 0, y = 0;
+  String fileName;
+  for (uint8_t i = 0; i < server.args(); i++) {
+    const auto &name = server.argName(i);
+    const auto &arg = server.arg(i);
+    if (name == "filename")
+      fileName = arg;
+    if (name == "x")
+      x = arg.toInt();
+    if (name == "y")
+      y = arg.toInt();
+  }
+
+  if (!SPIFFS.exists(fileName)) {
+    server.send(501, "text/plain", "unknown file");
+    return;
+  }
+  File f = SPIFFS.open(fileName, "r");
+  if (!f) {
+    server.send(501, "text/plain", "Could not open file");
+    return;
+  }
+  PbmDraw<FlipDot_t> pbm(flipDot, f);
+
+  int chukSize = 512;
+  if (!pbm.readHeader()) {
+    server.send(501, "text/plain", "Could not read Header");
+    return;
+  }
+  pbm.blit(0, 0);
+  int flipped = flipDot.display();
+  String res = "Flipped bits for:";
+  res += fileName;
+  res += " ";
+  res += flipped;
+  f.close();
+  server.send(200, "text/plain", res);
+}
+void handleFileUpload() {
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+    if (!filename.startsWith("/"))
+      filename = "/" + filename;
+    //    DBG_OUTPUT_PORT.print("handleFileUpload Name: ");
+    //    DBG_OUTPUT_PORT.println(filename);
+    fsUploadFile = SPIFFS.open(filename, "w");
+    filename = String();
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // DBG_OUTPUT_PORT.print("handleFileUpload Data: ");
+    // DBG_OUTPUT_PORT.println(upload.currentSize);
+    if (fsUploadFile)
+      fsUploadFile.write(upload.buf, upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (fsUploadFile)
+      fsUploadFile.close();
+    //    DBG_OUTPUT_PORT.print("handleFileUpload Size: ");
+    //    DBG_OUTPUT_PORT.println(upload.totalSize);
+  }
+}
+
+void handleList() {
+  String path = "/";
+  if (server.hasArg("dir")) {
+    path = server.arg("dir");
+  }
+
+  Dir dir = SPIFFS.openDir(path);
+  path = String();
+
+  String output = "[";
+  while (dir.next()) {
+    File entry = dir.openFile("r");
+    if (output != "[")
+      output += ',';
+    bool isDir = false;
+    output += "{\"type\":\"";
+    output += (isDir) ? "dir" : "file";
+    output += "\",\"name\":\"";
+    output += String(entry.name()).substring(1);
+    output += "\"}";
+    entry.close();
+  }
+
+  output += "]";
+  server.send(200, "text/json", output);
+}
+
 void setup(void) {
+  SPIFFS.begin();
+  //  SPIFFS.format();
   pinMode(led, OUTPUT);
   digitalWrite(led, 0);
   Serial.begin(38400);
@@ -151,6 +250,15 @@ void setup(void) {
     flipDot.display();
     server.send(200, "text/plain", "Display was inverted");
   });
+
+  // first callback is called after the request has ended with all parsed
+  // arguments
+  // second callback handles file uploads at that location
+  server.on("/upload", HTTP_POST, []() { server.send(200, "text/plain", "FileUploadhandler"); },
+            handleFileUpload);
+
+  server.on("/show", handleShow);
+  server.on("/list", handleList);
 
   server.onNotFound(handleNotFound);
 

@@ -21,17 +21,27 @@ public:
     framebuffer[idx] = (color != 0);
   }
 
-  /// send changes to display
-  void display() {
+  /// send changes to display, return dots flipped
+  int display() {
+    int flips = 0;
+    int flipped =0;
     for (int j = 0; j < height(); j++) {
       for (int i = 0; i < width(); i++) {
         int idx = j * width() + i;
-        if (framebuffer[idx] != currentDisplay[idx])
-          plot(i, j, framebuffer[idx]);
+        if (framebuffer[idx] != currentDisplay[idx]) {
+          plot(i, j, framebuffer[idx]); flips++; flipped++;
+        }
+        if (flips >= 128) {
+          // the HW serial buffer is 256 bytes, so if we have written it to the
+          // full capacity let the webserver work
+          delay(10); flips = 0;
+          // this is a viable strategy?
+        }
       }
     }
     currentDisplay = framebuffer;
     mirror.display();
+    return flipped;
   }
 
   void invert() { framebuffer.flip(); }
@@ -46,9 +56,9 @@ public:
 
   void reset() {
     for (int i = 0; i < 5; i++)
-      forceAll(0);
-    for (int i = 0; i < 5; i++)
       forceAll(1);
+    for (int i = 0; i < 5; i++)
+      forceAll(0);
     framebuffer.reset();
     currentDisplay.set();
     display();
