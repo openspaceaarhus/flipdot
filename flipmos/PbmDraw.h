@@ -28,6 +28,7 @@ public:
     line = file.readStringUntil('\n');
     w = file.parseInt();
     h = file.parseInt();
+    file.read();                // single whitespace often '\n'
     return true;
   }
 
