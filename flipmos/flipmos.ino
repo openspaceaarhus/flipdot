@@ -34,7 +34,13 @@ void resetFlipDots() {
 }
 
 void handleRoot() {
-  digitalWrite(led, 1);
+  String path = "/index.html";
+  if (SPIFFS.exists(path)) {
+    File file = SPIFFS.open(path, "r");
+    size_t sent = server.streamFile(file, "text/html");
+    file.close();
+    return;
+  }
   if (server.args() > 0) {
     flipDot.fillScreen(0);
     flipDot.setCursor(10, 2);
@@ -66,20 +72,27 @@ void handleNotFound() {
   digitalWrite(led, 0);
 }
 
+int x,y;
+void readXYfromArgs() {
+  x = y = 0;
+  if (server.hasArg("x")) {
+    x = server.arg("x").toInt();
+  }
+  if (server.hasArg("y")) {
+    y = server.arg("y").toInt();
+  }
+}
+
 void handleSay() {
 
   String text = "";
-  unsigned char x = 0, y = 0, color = 0, size = 1, text_color = 1, clear = 1;
-
+  unsigned char color = 0, size = 1, text_color = 1, clear = 1;
+  readXYfromArgs();
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
     const auto &arg = server.arg(i);
     if (name == "text")
       text = arg;
-    if (name == "x")
-      x = arg.toInt();
-    if (name == "y")
-      y = arg.toInt();
     if (name == "size")
       size = arg.toInt();
     if (name == "color")
@@ -98,17 +111,13 @@ void handleSay() {
 }
 
 void handleShow() {
-  int x = 0, y = 0;
+  readXYfromArgs();
   String fileName;
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
     const auto &arg = server.arg(i);
     if (name == "filename")
       fileName = arg;
-    if (name == "x")
-      x = arg.toInt();
-    if (name == "y")
-      y = arg.toInt();
   }
 
   if (!SPIFFS.exists(fileName)) {
@@ -141,7 +150,7 @@ void handleShow() {
     return;
   }
 
-  pbm.blit(0, 0);
+  pbm.blit(x, y);
   int flipped = flipDot.display();
   String res = "Flipped bits for:";
   res += fileName;
@@ -156,20 +165,14 @@ void handleFileUpload() {
     String filename = upload.filename;
     if (!filename.startsWith("/"))
       filename = "/" + filename;
-    //    DBG_OUTPUT_PORT.print("handleFileUpload Name: ");
-    //    DBG_OUTPUT_PORT.println(filename);
     fsUploadFile = SPIFFS.open(filename, "w");
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // DBG_OUTPUT_PORT.print("handleFileUpload Data: ");
-    // DBG_OUTPUT_PORT.println(upload.currentSize);
     if (fsUploadFile)
       fsUploadFile.write(upload.buf, upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END) {
     if (fsUploadFile)
       fsUploadFile.close();
-    //    DBG_OUTPUT_PORT.print("handleFileUpload Size: ");
-    //    DBG_OUTPUT_PORT.println(upload.totalSize);
   }
 }
 
@@ -192,7 +195,7 @@ void handleList() {
     output += (isDir) ? "dir" : "file";
     output += "\",\"name\":\"";
     output += String(entry.name()).substring(1);
-    output += "\"}";
+    output += "\"}\n";
     entry.close();
   }
 
@@ -200,11 +203,24 @@ void handleList() {
   server.send(200, "text/json", output);
 }
 
+
+
+void handleSet() {
+  readXYfromArgs();
+  char on = 1;
+  if (server.hasArg("on")) {
+    on = (server.arg("on") == "1");
+  }
+  flipDot.plot(x,y,on);
+  flipDot.display();
+  server.send(200, "text/plain", "pixel was set");
+}
+
 void setup(void) {
-  SPIFFS.begin();
-  //  SPIFFS.format();
   pinMode(led, OUTPUT);
-  digitalWrite(led, 0);
+  digitalWrite(led, 1);
+
+  SPIFFS.begin();
   Serial.begin(38400);
   WiFi.begin(SSID, PASSWORD);
   Serial.println("");
@@ -225,14 +241,14 @@ void setup(void) {
     delay(500);
     oled.println("Connect to");
     oled.println(SSID);
-
+    digitalWrite(led, idx % 2);
     for (int i = 0; i < SSD1306_LCDWIDTH; i++)
       oled.drawPixel(i, SSD1306_LCDHEIGHT - 1, (i < idx) ? WHITE : BLACK);
     idx++;
     if (SSD1306_LCDWIDTH - 1 == idx)
       idx = 0;
   }
-
+  digitalWrite(led, 0);
   oled.clearDisplay();
   oled.setCursor(0, 12);
   oled.print("IP address: ");
@@ -248,19 +264,19 @@ void setup(void) {
   server.on("/say", handleSay);
 
   server.on("/reset", resetFlipDots);
-  server.on("/fill", [flipDot, server]() {
+  server.on("/fill", [&flipDot, &server]() {
     flipDot.fillScreen(1);
     flipDot.display();
     server.send(200, "text/plain", "Display was filled");
   });
-  server.on("/clear", [flipDot, server]() {
+  server.on("/clear", [&flipDot, &server]() {
     oled.clearDisplay();
     flipDot.fillScreen(0);
     flipDot.display();
     server.send(200, "text/plain", "Display was cleared");
   });
 
-  server.on("/invert", [flipDot, server]() {
+  server.on("/invert", [&flipDot, &server]() {
     flipDot.invert();
     flipDot.display();
     server.send(200, "text/plain", "Display was inverted");
@@ -274,6 +290,8 @@ void setup(void) {
 
   server.on("/show", handleShow);
   server.on("/list", handleList);
+  server.on("/set", handleSet);
+  server.on("/format", [&server]() { SPIFFS.format(); server.send(200, "formatted filesystem");});
 
   server.onNotFound(handleNotFound);
 
