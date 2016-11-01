@@ -72,7 +72,7 @@ void handleNotFound() {
   digitalWrite(led, 0);
 }
 
-int x,y;
+volatile int x,y;
 void readXYfromArgs() {
   x = y = 0;
   if (server.hasArg("x")) {
@@ -84,9 +84,8 @@ void readXYfromArgs() {
 }
 
 void handleSay() {
-
   String text = "";
-  unsigned char color = 0, size = 1, text_color = 1, clear = 1;
+  unsigned char  size = 1, text_color = 1, clear = 1;
   readXYfromArgs();
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
