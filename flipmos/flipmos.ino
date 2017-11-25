@@ -244,10 +244,7 @@ void handleSet() {
 
 void handleBitflip() {
   String chars = server.arg("bits");
-<<<<<<< HEAD
-  
-=======
->>>>>>> 002fe7a6a7c907bbfdf4f350c59f3ea44ca60c0a
+
   if (chars.length() > (SIGN_W * SIGN_H)) {
     server.send(400, "text/plain", "Array too large");
     return;
