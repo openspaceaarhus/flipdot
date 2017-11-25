@@ -18,7 +18,7 @@
 
 #define OLED_RESET 0               // GPIO0
 Adafruit_SSD1306 oled(OLED_RESET); // will often mirror the expected content of
-                                   // the flipdot display
+// the flipdot display
 
 typedef FlipDot<Adafruit_SSD1306> FlipDot_t;
 FlipDot_t flipDot(oled);
@@ -35,12 +35,14 @@ void resetFlipDots() {
 
 void handleRoot() {
   String path = "/index.html";
+  
   if (SPIFFS.exists(path)) {
     File file = SPIFFS.open(path, "r");
     size_t sent = server.streamFile(file, "text/html");
     file.close();
     return;
   }
+  
   if (server.args() > 0) {
     flipDot.fillScreen(0);
     flipDot.setCursor(10, 2);
@@ -65,19 +67,24 @@ void handleNotFound() {
   message += "\nArguments: ";
   message += server.args();
   message += "\n";
+  
   for (uint8_t i = 0; i < server.args(); i++) {
     message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
   }
+  
   server.send(404, "text/plain", message);
   digitalWrite(led, 0);
 }
 
-volatile int x,y;
+volatile int x, y;
+
 void readXYfromArgs() {
   x = y = 0;
+  
   if (server.hasArg("x")) {
     x = server.arg("x").toInt();
   }
+  
   if (server.hasArg("y")) {
     y = server.arg("y").toInt();
   }
@@ -87,20 +94,27 @@ void handleSay() {
   String text = "";
   unsigned char  size = 1, text_color = 1, clear = 1;
   readXYfromArgs();
+  
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
     const auto &arg = server.arg(i);
+  
     if (name == "text")
       text = arg;
+    
     if (name == "size")
       size = arg.toInt();
+    
     if (name == "color")
       text_color = arg.toInt();
+    
     if (name == "clear")
       clear = arg.toInt();
   }
+  
   if (clear)
     flipDot.fillScreen(text_color ? BLACK : WHITE);
+  
   flipDot.setTextColor(text_color ? WHITE : BLACK);
   flipDot.setCursor(x, y);
   flipDot.setTextSize(size);
@@ -112,9 +126,11 @@ void handleSay() {
 void handleShow() {
   readXYfromArgs();
   String fileName;
+  
   for (uint8_t i = 0; i < server.args(); i++) {
     const auto &name = server.argName(i);
     const auto &arg = server.arg(i);
+    
     if (name == "filename")
       fileName = arg;
   }
@@ -123,7 +139,9 @@ void handleShow() {
     server.send(501, "text/plain", "unknown file");
     return;
   }
+  
   File f = SPIFFS.open(fileName, "r");
+  
   if (!f) {
     server.send(501, "text/plain", "Could not open file");
     return;
@@ -132,6 +150,7 @@ void handleShow() {
   PbmDraw<FlipDot_t> pbm(flipDot, f);
 
   int chukSize = 512;
+  
   if (!pbm.readHeader()) {
     server.send(501, "text/plain", "Could not read Header");
     return;
@@ -158,12 +177,16 @@ void handleShow() {
   f.close();
   server.send(200, "text/plain", res);
 }
+
 void handleFileUpload() {
   HTTPUpload &upload = server.upload();
+  
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
+    
     if (!filename.startsWith("/"))
       filename = "/" + filename;
+    
     fsUploadFile = SPIFFS.open(filename, "w");
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -177,6 +200,7 @@ void handleFileUpload() {
 
 void handleList() {
   String path = "/";
+  
   if (server.hasArg("dir")) {
     path = server.arg("dir");
   }
@@ -185,10 +209,13 @@ void handleList() {
   path = String();
 
   String output = "[";
+  
   while (dir.next()) {
     File entry = dir.openFile("r");
+    
     if (output != "[")
       output += ',';
+    
     bool isDir = false;
     output += "{\"type\":\"";
     output += (isDir) ? "dir" : "file";
@@ -202,17 +229,36 @@ void handleList() {
   server.send(200, "text/json", output);
 }
 
-
-
 void handleSet() {
   readXYfromArgs();
   char on = 1;
+  
   if (server.hasArg("on")) {
     on = (server.arg("on") == "1");
   }
-  flipDot.plot(x,y,on);
+  
+  flipDot.plot(x, y, on);
   flipDot.display();
   server.send(200, "text/plain", "pixel was set");
+}
+
+void handleBitflip() {
+  String chars = server.arg("bits");
+  if (chars.length() > (SIGN_W * SIGN_H)) {
+    server.send(400, "text/plain", "Array too large");
+    return;
+  }
+  
+  for (int i = 0; i < chars.length(); i++) {
+    bool on = chars[i] == '1';
+    int x = i % SIGN_W;
+    int y = (i / SIGN_W) % SIGN_H;
+    Serial.print(on);
+    flipDot.plot(x, y, on);
+  }
+  
+  flipDot.display();
+  server.send(204, "text/plain", "");
 }
 
 void setup(void) {
@@ -223,8 +269,7 @@ void setup(void) {
   Serial.begin(38400);
   WiFi.begin(SSID, PASSWORD);
   Serial.println("");
-  oled.begin(SSD1306_SWITCHCAPVCC,
-             0x3C); // initialize with the I2C addr 0x3C (for the 64x48)
+  oled.begin(SSD1306_SWITCHCAPVCC, 0x3C); // initialize with the I2C addr 0x3C (for the 64x48)
   // Clear the buffer.
   oled.clearDisplay();
   oled.setTextSize(1);
@@ -234,19 +279,25 @@ void setup(void) {
   oled.println(SSID);
 
   oled.display();
+
   // Wait for connection
   int idx = 0;
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     oled.println("Connect to");
     oled.println(SSID);
     digitalWrite(led, idx % 2);
+    
     for (int i = 0; i < SSD1306_LCDWIDTH; i++)
       oled.drawPixel(i, SSD1306_LCDHEIGHT - 1, (i < idx) ? WHITE : BLACK);
+    
     idx++;
+    
     if (SSD1306_LCDWIDTH - 1 == idx)
       idx = 0;
   }
+  
   digitalWrite(led, 0);
   oled.clearDisplay();
   oled.setCursor(0, 12);
@@ -256,12 +307,11 @@ void setup(void) {
   oled.display();
 
   if (MDNS.begin(MDNS_NAME)) {
-    // Serial.println("MDNS responder started");
+    Serial.println("MDNS responder started");
   }
 
   server.on("/", handleRoot);
   server.on("/say", handleSay);
-
   server.on("/reset", resetFlipDots);
   server.on("/fill", [&flipDot, &server]() {
     flipDot.fillScreen(1);
@@ -274,7 +324,6 @@ void setup(void) {
     flipDot.display();
     server.send(200, "text/plain", "Display was cleared");
   });
-
   server.on("/invert", [&flipDot, &server]() {
     flipDot.invert();
     flipDot.display();
@@ -284,17 +333,21 @@ void setup(void) {
   // first callback is called after the request has ended with all parsed
   // arguments
   // second callback handles file uploads at that location
-  server.on("/upload", HTTP_POST, []() { server.send(200, "text/plain", "FileUploadhandler"); },
-            handleFileUpload);
-
+  server.on("/upload", HTTP_POST, []() {
+    server.send(200, "text/plain", "FileUploadhandler");
+  }, handleFileUpload);
   server.on("/show", handleShow);
   server.on("/list", handleList);
   server.on("/set", handleSet);
-  server.on("/format", [&server]() { SPIFFS.format(); server.send(200, "formatted filesystem");});
-
+  server.on("/format", [&server]() {
+    SPIFFS.format();
+    server.send(200, "formatted filesystem");
+  });
+  server.on("/bitflip", handleBitflip);
   server.onNotFound(handleNotFound);
-
   server.begin();
 }
 
-void loop(void) { server.handleClient(); }
+void loop(void) {
+  server.handleClient();
+}

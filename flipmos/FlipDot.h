@@ -24,13 +24,16 @@ public:
   /// send changes to display, return dots flipped
   int display() {
     int flips = 0;
-    int flipped =0;
+    int flipped = 0;
+    
     for (int j = 0; j < height(); j++) {
       for (int i = 0; i < width(); i++) {
         int idx = j * width() + i;
+        
         if (framebuffer[idx] != currentDisplay[idx]) {
           plot(i, j, framebuffer[idx]); flips++; flipped++;
         }
+        
         if (flips >= 128) {
           // the HW serial buffer is 256 bytes, so if we have written it to the
           // full capacity let the webserver work
@@ -39,26 +42,32 @@ public:
         }
       }
     }
+    
     currentDisplay = framebuffer;
     mirror.display();
+    
     return flipped;
   }
 
   void invert() { framebuffer.flip(); }
 
   void forceAll(char color) {
+    
     for (int j = 0; j < height(); j++) {
       for (int i = 0; i < width(); i++) {
         sendpixel(i, j, color);
       }
     }
+    
   }
 
   void reset() {
     for (int i = 0; i < 5; i++)
       forceAll(1);
+    
     for (int i = 0; i < 5; i++)
       forceAll(0);
+    
     framebuffer.reset();
     currentDisplay.set();
     display();
@@ -66,11 +75,13 @@ public:
 
   void plot(char x, char y, char on) {
     sendpixel(x, y, on);
+    
     // wrap (wemos) display to show full screen in a manner
     if (x > mirror.width()) {
       x -= mirror.width();
       y += SIGN_H + 2;
     }
+    
     mirror.drawPixel(x, y, on ? WHITE : BLACK);
   }
 
@@ -84,6 +95,7 @@ private:
     Serial.write((y & 0x7F) | on << 7);
     Serial.write(x);
   }
+  
   Mirror &mirror;
   std::bitset<SIGN_W * SIGN_H> framebuffer;
   std::bitset<SIGN_W * SIGN_H> currentDisplay;
