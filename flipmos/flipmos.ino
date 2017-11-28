@@ -254,7 +254,6 @@ void handleBitflip() {
     bool on = chars[i] == '1';
     int x = i % SIGN_W;
     int y = (i / SIGN_W) % SIGN_H;
-    Serial.print(on);
     flipDot.plot(x, y, on);
   }
   
