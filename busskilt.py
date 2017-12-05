@@ -9,15 +9,15 @@ from cStringIO import StringIO
 #from io import StringIO
 import socket
 
-#try:
-ser = serial.Serial(
-    port='/dev/ttyACM0',
-    baudrate=38400
-)
-#except Exception,e:
-#   ser = None
-#   udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#   udp.bind(('', 7654))
+try:
+    ser = serial.Serial(
+        port='/dev/ttyACM0',
+        baudrate=38400
+  )
+except Exception,e:
+  ser = None
+  udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  udp.bind(('', 7654))
 
 #ser.open()
 #ser.isOpen()
@@ -26,6 +26,9 @@ ser = serial.Serial(
 #xprint ser.writable()
 
 time.sleep(1)
+
+HOST = "172.30.0.117"
+PORT = 4334
 
 def buffer(f):
     return [[f(x,y) for y in range(112)] for x in range(20)]
@@ -60,12 +63,13 @@ def display(old, new):
                     out.write(chr(v))
                     b = 0
                     v = 0
+        out.write(chr(v))
         data = out.getvalue()
-        address = ("10.0.2.81", 4334)
+        address = (HOST, PORT)
         udp.sendto(data, address)
-        udp.sendto(data, address)
-        udp.sendto(data, address)
-        time.sleep(0.03)
+#        udp.sendto(data, address)
+ #       udp.sendto(data, address)
+        time.sleep(0.1)
 
 random.seed()
 
@@ -166,8 +170,27 @@ def Cube():
         t += 1
 
 
+def tester():
+    global A,B
+    update(A, lambda x,y : 0)
+    display(B,A)
+
+    n = 0
+    while True:
+        n += 1
+        if (n == 20):
+                n = 0
+
+        for x in range(20):
+            for y in range(112):
+                B[x][y] = 1 if (n == x) else 0
+        display(A,B)
+        A,B = B,A
+
+
 #GameOfLife()
-Metaballs()
-#Cube()
+#Metaballs()
+Cube()
+#tester();
 
 ser.close()
