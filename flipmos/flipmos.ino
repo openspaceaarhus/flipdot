@@ -2,6 +2,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
+#include <WiFiUdp.h>
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -24,6 +25,10 @@ typedef FlipDot<Adafruit_SSD1306> FlipDot_t;
 FlipDot_t flipDot(oled);
 ESP8266WebServer server(80);
 const int led = 13; // blinks sometimes
+
+WiFiUDP Udp;
+unsigned int localUdpPort = 4334; // local port to listen on
+char incomingPacket[PIXELS];      // buffer for incoming packets
 
 // holds the current upload
 File fsUploadFile;
@@ -309,6 +314,8 @@ void setup(void) {
     Serial.println("MDNS responder started");
   }
 
+  Udp.begin(localUdpPort);
+
   server.on("/", handleRoot);
   server.on("/say", handleSay);
   server.on("/reset", resetFlipDots);
@@ -347,4 +354,23 @@ void setup(void) {
   server.begin();
 }
 
-void loop(void) { server.handleClient(); }
+void loop(void) {
+  server.handleClient();
+
+  int packetSize = Udp.parsePacket();
+  if (packetSize) {
+    int len = Udp.read(incomingPacket, PIXELS);
+    int idx = 0;
+    for (int i = 0; i < len; i++) {
+      char bits = incomingPacket[i];
+      for (int j = 0; j < 8; j++) {
+        char bit = (bits >> j) & 1;
+        flipDot.setPixel(idx++, bit);
+        if (idx == PIXELS) {
+          flipDot.display();
+          return;
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@
 
 #define SIGN_W 112
 #define SIGN_H  20
+#define PIXELS (SIGN_H * SIGN_W)
 
 #define SSID "@SSID@"
 #define PASSWORD "@PASSWORD@"

@@ -101,8 +101,8 @@ private:
   }
 
   Mirror &mirror;
-  std::bitset<SIGN_W * SIGN_H> framebuffer;
-  std::bitset<SIGN_W * SIGN_H> currentDisplay;
+  std::bitset<PIXELS> framebuffer;
+  std::bitset<PIXELS> currentDisplay;
 };
 
 #endif /* !FLIPDOT_H_ */
