@@ -106,3 +106,4 @@ private:
 };
 
 #endif /* !FLIPDOT_H_ */
+ 
