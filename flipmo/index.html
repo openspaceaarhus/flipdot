@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <!--
+        Can be via Curl
+        curl -F "filename=@/path/to/index.html" http://172.30.6.94/upload
+        -->
+        <title>Flipmo</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script>
+            //include VueJS?
+        </script>
+        <!--<script src="https://unpkg.com/vue@2.1.10/dist/vue.min.js"></script>-->
+        <script src="https://unpkg.com/vue@2.1.10/dist/vue.js"></script>
+        <style>
+            /* Resets */
+            html,body {
+                margin: 0;
+                /*overflow: hidden;*/
+                height: 100vh;
+                color: #333;
+            }
+
+            /* Main Content */
+            div.content {
+                padding: 8px;
+            }
+            
+            canvas {
+                border: 2px solid #ccc;
+            }
+            
+            /* Transitions */
+            .fade-enter-active, fade-leave-active {
+                transition: all .5s ease;
+            }
+            .fade-enter, .fade-leave-active {
+                opacity: 0;
+            }
+            
+            .btn-group > :first-child {
+                border-top-left-radius: 7px;
+                border-bottom-left-radius: 7px;
+                border-left: 1px solid black;
+            }
+            
+            .btn-group > :not(:first-child) {
+                border-left: none;
+            }
+            
+            .btn-group > :last-child {
+                border-top-right-radius: 7px;
+                border-bottom-right-radius: 7px;
+            }
+            
+            .btn-group button {
+                display: inline-block;
+                width: auto;
+                height: 30px;
+                border-top: 1px solid #000000;
+                border-bottom: 1px solid #000000;
+                border-right: 1px solid #000000;
+                padding: 0 7px 0 7px;
+                background: #ffffff;
+                outline: 0;
+            }
+            
+            /* Navbar */
+            ul {
+                list-style-type: none;
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                background-color: #333;
+            }
+            li {
+                float: left;
+            }
+            li a, .dropbtn {
+                display: inline-block;
+                color: white;
+                text-align: center;
+                padding: 14px 16px;
+                text-decoration: none;
+            }
+            li a:hover, .dropdown:hover .dropbtn {
+                background-color: #719430;
+            }
+            li.dropdown {
+                display: inline-block;
+            }
+            .dropdown-content {
+                display: none;
+                position: absolute;
+                background-color: #f9f9f9;
+                min-width: 160px;
+                box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+                z-index: 1;
+            }
+            .dropdown-content a {
+                color: black;
+                padding: 12px 16px;
+                text-decoration: none;
+                display: block;
+                text-align: left;
+            }
+            .dropdown-content a:hover {
+                /*background-color: #f1f1f1*/
+                background-color: #719430;
+            }
+            .dropdown:hover .dropdown-content {
+                display: block;
+            }
+            .active {
+                background-color: #719430;
+                color: white;
+            }
+            .underline {
+                text-decoration: underline;
+            }
+            .hidden {
+                display: none;
+            }
+            
+            /* Modal Header */
+            .modal-header {
+                padding: 2px 16px;
+                background-color: #333;
+                color: white;
+            }
+            /* Modal Body */
+            .modal-body {padding: 2px 16px;}
+            /* Modal Footer */
+            .modal-footer {
+                padding: 2px 16px;
+                background-color: #5cb85c;
+                color: white;
+            }
+            /* Modal Content */
+            .modal-content {
+                position: relative;
+                background-color: #fefefe;
+                margin: auto;
+                padding: 0;
+                border: 1px solid #888;
+                width: 80%;
+                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19);
+                -webkit-animation-name: animatetop;
+                -webkit-animation-duration: 0.4s;
+                animation-name: animatetop;
+                animation-duration: 0.4s
+            }
+            /* Add Animation */
+            @-webkit-keyframes animatetop {
+                from {top: -300px; opacity: 0} 
+                to {top: 0; opacity: 1}
+            }
+            @keyframes animatetop {
+                from {top: -300px; opacity: 0}
+                to {top: 0; opacity: 1}
+            }
+        </style>
+    </head>
+    <body>
+        <div id="flipmo-app">
+            <ul>
+                <li class="dropdown">
+                    <a href="javascript:void(0)" class="dropbtn"><span class="underline">C</span>olor:{{ activeColor[0].toUpperCase() + activeColor.slice(1) }}</a>
+                    <div class="dropdown-content">
+                        <a href="#" :id="color" v-for="color in colors" @click="setColor(color)" :class="[activeColor == color ? 'active' : '']">{{ color[0].toUpperCase() + color.slice(1) }}</a>
+                    </div>
+                </li>
+                <!--<li class="dropdown">
+                    <a href="javascript:void(0)" class="dropbtn">Tool</a>
+                    <div class="dropdown-content">
+                        <a href="#"><span class="underline">P</span>encil</a>
+                        <a href="#"><span class="underline">L</span>ine</a>
+                        <a href="#" @click="setTool($event)"><span class="underline">C</span>ircle</a>
+                        <a href="#">S<span class="underline">q</span>uare</a>
+                    </div>
+                </li>
+                <li><a href="#"><span class="underline">U</span>ndo</a></li>
+                <li><a href="#"><span class="underline">R</span>edo</a></li>
+                <li><a href="#" @click><span class="underline">O</span>pen</a></li>-->
+                <!--<li><a href="#" @click="download()"><span class="underline">D</span>ownload</a></li>-->
+                <li><a href="#" @click="toggleShowPbm()" :class="{ active: showPbm }"><span class="underline">S</span>how PBM</a></li>
+                <li><a href="#" @click="upload()">U<span class="underline">p</span>load</a></li>
+                <!--<li><a href="#" @click="showList()"><span class="underline">L</span>ist</a></li>-->
+            </ul>
+            <div class="content">
+                <canvas id="flipdot"></canvas>
+                <div>
+                    <input type="text" id="filename" placeholder="filename (without .pbm)" v-model="title">
+                </div>
+                <div>
+                    <input type="text" id="say" placeholder="or just say something" v-model="say" @keypress.enter="flipmos.say(say)">
+                </div>
+            </div>
+            <div class="pbm" :class="[ showPbm == true ? '' : 'hidden']">
+                
+            </div>
+            <div class="modal-content" :class="[ showPbm == true ? '' : 'hidden' ]">
+                <!--<div class="modal-header">
+                    <span class="close" @click="showPbmModal = false">&times;</span>
+                    <h2>{{ title }}</h2>
+                </div>-->
+                <div class="modal-body">
+                    <pre>{{ pbm }}</pre>
+                </div>
+                <!--<div class="modal-footer">
+                    <h3>Modal Footer</h3>
+                </div>-->
+            </div>
+        </div>
+        <script>
+            class Flipmos {
+                constructor(address) {
+                    this.queue = []
+                    this.address = typeof address !== 'undefined' ? address : ''
+                }
+                set(x, y) {
+                    this.sendRequest({
+                        path: 'set',
+                        params: {
+                            x: x,
+                            y: y
+                        }
+                    })
+                }
+                say(text, size, color, clear) {
+                    this.sendRequest({
+                        path: 'say',
+                        params: {
+                            text: text,
+                            size: size, // 1 to 3 recommended
+                            color: color, // 1=black-on-white 1=white-on-black
+                            clear: clear // 1=clear-before-write 0=dont
+                        }
+                    })
+                }
+                show(filename) {
+                    this.sendRequest({
+                        path: 'show',
+                        params: {
+                            filename: `/${filename}.pbm`
+                        }
+                    })
+                }
+                list() {
+                    // Lists files on the device
+                    this.sendRequest({
+                        path: 'list'
+                    })
+                }
+                upload(pbm, title) {
+                    //title = typeof title !== 'undefined' ? title : 'untitled.pbm';
+                    if (title.indexOf('.pbm') != title.length - 4) {
+                        title = `${title}.pbm`
+                    }
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/upload', true);
+                    xhr.onreadystatechange = function() {
+                        if (this.readyState == this.DONE) {
+                            console.log(`Upload status was ${this.status}`);
+                        }
+                    }
+                    /*xhr.onload = function() {
+                        console.log(xhr.responseText);
+                    };*/
+                    var boundary = '';
+                    boundary += Math.floor(Math.random()*32768);
+                    boundary += Math.floor(Math.random()*32768);
+                    boundary += Math.floor(Math.random()*32768);
+                    xhr.setRequestHeader("Content-Type", 'multipart/form-data; boundary=' + boundary);
+                    var body = '';
+                    body += '--' + boundary + "\r\n";
+                    body += 'Content-Disposition: form-data; name="filename"; filename="' + title + '"' + "\r\n";
+                    body += "Content-Type: application-/octet-stream\r\n";
+                    body += "\r\n";
+                    body += pbm;
+                    body += "\r\n";
+                    body += '--' + boundary + '--\r\n';
+                    xhr.send(body);
+                }
+                clear() {
+                    this.sendRequest({
+                        path: 'clear'
+                    })
+                }
+                fill() {
+                    this.sendRequest({
+                        path: 'fill'
+                    })
+                }
+                canCommunicate(callback) {
+                    var xhr = new XMLHttpRequest()
+                    xhr.open('HEAD', this.address);
+                    xhr.onreadystatechange = function() {
+                        if (this.readyState == this.DONE) {
+                            callback(this.status == 200);
+                        }
+                    }
+                    xhr.send();
+                }
+                _iterate() {
+                    if (this.queue.length == 0) { return }
+                    this._activeRequest = new XMLHttpRequest();
+                    var params = [];
+                    for (var param in this.queue[0].params) {
+                        if (typeof this.queue[0].params[param] !== 'undefined') {
+                            params.push(param+'='+this.queue[0].params[param])
+                        }
+                    }
+                    this._activeRequest.open('POST', this.address+this.queue[0].path, true);
+                    var self = this;
+                    this._activeRequest.onreadystatechange = function() {
+                        if (self._activeRequest.readyState == 4 && self._activeRequest.status == 200) {
+                            console.log(self._activeRequest.response);
+                            self.queue.shift();
+                            self._iterate();
+                        }
+                    }
+                    this._activeRequest.send(params.join('&'));
+                }
+                sendRequest(request) {
+                    this.queue.push(request)
+                    if (this.queue.length == 0) { return }
+                    this._iterate()
+                }
+                emptyQueue() {
+                    this._activeRequest.abort()
+                    while (this.queue.length !== 0) {
+                        this.queue.pop()
+                    }
+                }
+            }
+            
+            class Flipmo {
+                constructor(canvas, dimensions) {
+                    if (typeof canvas === 'undefined') {
+                        throw 'Canvas variable not defined';
+                        return;
+                    }
+                    //this.dot = {}
+                    this.dotSize = typeof dimensions.dotSize !== 'undefined' ? dimensions.dotSize : 8;
+                    this.grid = {};
+                    this.gridRows = typeof dimensions.gridRows !== 'undefined' ? dimensions.gridRows : 20;
+                    this.gridCols = typeof dimensions.gridCols !== 'undefined' ? dimensions.gridCols : 112;
+                    this.canvas = canvas;
+                    this.canvas.width = this.gridCols * this.dotSize;
+                    this.canvas.height = this.gridRows * this.dotSize;
+                    //this.canvasOffset = this.getCanvasOffset(canvas, document.body);
+                    this.canvasOffset = this.getPosition(canvas);
+                    this.context = this.canvas.getContext('2d');
+                    this.shadowDots = [];
+                    this.mouseDown = false;
+                    this.lastDot = false;
+                    this.color = 'black';
+                    this.undoLog = [];
+                    this.redoLog = [];
+                    // Populate the shadowDots array.
+                    for (var y = 0; y < this.gridRows; y++) {
+                        this.shadowDots[y] = [];
+                        for (var x = 0; x < this.gridCols; x++) {
+                            this.shadowDots[y][x] = 0;
+                        }
+                    }
+                    //canvas.onmousedown = (function(event) {
+                    this.canvas.addEventListener('mousedown', (function(event) {
+                        this.mouseDown = true;
+                        this.draw(this.getDot(event));
+                    }).bind(this));
+                    //canvas.onmouseup = (function(event) {
+                    this.canvas.addEventListener('mouseup', (function(event) {
+                        this.mouseDown = false;
+                        this.lastDot = false;
+                    }).bind(this));
+                    //this.canvas.onmousemove = (function(event) {
+                    this.canvas.addEventListener('mousemove', (function(event) {
+                        if (!this.mouseDown) {
+                            return;
+                        }
+                        this.draw(this.getDot(event));
+                        event.preventDefault();
+                    }).bind(this));
+                }
+                // Helper function to get an element's exact position
+                getPosition(el) {
+                    var xPos = 0;
+                    var yPos = 0;
+                    while (el) {
+                        if (el.tagName == "BODY") {
+                            // deal with browser quirks with body/window/document and page scroll
+                            var xScroll = el.scrollLeft || document.documentElement.scrollLeft;
+                            var yScroll = el.scrollTop || document.documentElement.scrollTop;
+                            xPos += (el.offsetLeft - xScroll + el.clientLeft);
+                            yPos += (el.offsetTop - yScroll + el.clientTop);
+                        } else {
+                            // for all other non-BODY elements
+                            xPos += (el.offsetLeft - el.scrollLeft + el.clientLeft);
+                            yPos += (el.offsetTop - el.scrollTop + el.clientTop);
+                        }
+                        el = el.offsetParent;
+                    }
+                    return {
+                        left: xPos,
+                        top: yPos
+                    };
+                }
+                getDot(event) {
+                    //var event = event || window.event
+                    //if (event.pageX !== undefined) {
+                    var dot = {
+                        cornerX: (event.pageX - this.canvasOffset.left),
+                        cornerY: (event.pageY - this.canvasOffset.top),
+                    }
+                    dot.cornerX -= dot.cornerX % this.dotSize;
+                    dot.cornerY -= dot.cornerY % this.dotSize;
+                    dot.x = dot.cornerX/this.dotSize;
+                    dot.y = dot.cornerY/this.dotSize;
+                    //}
+                    //mousePosition.pixel.x = (event.clientX + document.body.scrollLeft + document.documentElement.scrollLeft) - this.canvasOffset.left
+                    //mousePosition.pixel.y = (event.clientY + document.body.scrollTop + document.documentElement.scrollTop) - this.canvasOffset.top
+                    return dot;
+                }
+                draw(dot) {
+                    // drop if dot is outside boundaries
+                    if (dot.x > this.gridCols-1 || dot.y > this.gridRows-1) {
+                        return;
+                    }
+                    
+                    // drop unnecessary events
+                    if (this.lastDot.x == dot.x && this.lastDot.y == dot.y) {
+                        return;
+                    }
+                    
+                    // if currently drawing
+                    if (this.lastDot && this.mouseDown) {
+                        var bLine = this.getBresenhamLine(dot, this.lastDot);
+                        for (var i = 0; i < bLine.length; i++) {
+                            this.set(bLine[i]);
+                        }
+                    } else {
+                        //this.set(dot);
+                    }
+                    
+                    this.set(dot);
+                    
+                    //this.context.fillRect(dot.cornerX, dot.cornerY, this.dotSize, this.dotSize);
+                    this.lastDot = dot;
+                }
+                //redraw() {}
+                set(dot) {
+                    switch (this.color) {
+                        case 'black':
+                            this.context.fillStyle = '#000000';
+                            this.shadowDots[dot.y][dot.x] = 1;
+                            break;
+                        case 'white':
+                            this.context.fillStyle = '#FFFFFF';
+                            this.shadowDots[dot.y][dot.x] = 0;
+                            break;
+                        case 'invert':
+                            this.context.fillStyle = this.shadowDots[dot.y][dot.x] == 0 ? '#000000' : '#FFFFFF'
+                            this.shadowDots[dot.y][dot.x] = this.shadowDots[dot.y][dot.x] == 0 ? 1 : 0
+                            break;
+                    }
+                    this.context.fillRect(dot.cornerX, dot.cornerY, this.dotSize, this.dotSize);
+                }
+                getBresenhamLine(startCoordinates, endCoordinates) {
+                    if (typeof startCoordinates == 'undefined') { return [] }
+                    if (typeof endCoordinates == 'undefined') { return [] }
+                    var coordinatesArray = new Array();
+                    // Translate coordinates
+                    var x1 = startCoordinates.x;
+                    var y1 = startCoordinates.y;
+                    var x2 = endCoordinates.x;
+                    var y2 = endCoordinates.y;
+                    // Define differences and error check
+                    var dx = Math.abs(x2 - x1);
+                    var dy = Math.abs(y2 - y1);
+                    var sx = (x1 < x2) ? 1 : -1;
+                    var sy = (y1 < y2) ? 1 : -1;
+                    var err = dx - dy;
+                    // Set first coordinates
+                    coordinatesArray.push({x: x1, y: y1, cornerX: x1 * this.dotSize, cornerY: y1 * this.dotSize});
+                    // Main loop
+                    while (!((x1 == x2) && (y1 == y2))) {
+                        var e2 = err << 1;
+                        if (e2 > -dy) {
+                            err -= dy;
+                            x1 += sx;
+                        }
+                        if (e2 < dx) {
+                            err += dx;
+                            y1 += sy;
+                        }
+                        // Set coordinates
+                        coordinatesArray.push({x: x1, y: y1, cornerX: x1 * this.dotSize, cornerY: y1 * this.dotSize});
+                    }
+                    // Return the result
+                    return coordinatesArray;
+                }
+                getPbm(title) {
+                    var pbm = `P1\n# ${title}\n${this.gridCols} ${this.gridRows}\n`;
+                    for (var y = 0; y < this.gridRows; y++) {
+                        for (var x = 0; x < this.gridCols; x++) {
+                            pbm = `${pbm}${this.shadowDots[y][x]}`;
+                        }
+                        if (y < this.gridRows - 1) {
+                            pbm += "\n";
+                        }
+                    }
+                    return pbm;
+                }
+            }
+            
+            /*var myArr = [
+                {meh:1},
+                {meh:100},
+                [{meh:500},{meh:1000}],
+                {meh:5}
+            ]*/
+            
+            // Maybe implement using separate Undo and Redo arrays.
+            // Then compare for speed.
+            class UndoRedoLog {
+                constructor(maxLogSize) {
+                    this.log = []
+                    this.maxLogSize = typeof maxLogSize !== 'undefined' ? maxLogSize : 2240
+                    this.position = 0
+                }
+                add(obj) {
+                    if (this.position < this.log.length - 1) {
+                        // remove all from redo log
+                        this.log.splice(this.position, this.log.length - this.position - 1)
+                    } else if (this.position == this.log.length - 1) {
+                        // rotate left, if maxLogSize reached
+                        this.log.shift()
+                        this.position = this.position - 1
+                    }
+                    this.log.push(obj)
+                    this.position = this.position + 1
+                }
+                undo() {
+                    // avoid lower "out of bounds" exception
+                    if (this.position == 0) { return; }
+                    // move left, and return the previous object
+                    this.position = this.position - 1
+                    return this.log[this.position + 1]
+                }
+                redo() {
+                    // avoid upper "out of bounds" exception
+                    if (this.position == this.log.length - 1) { return; }
+                    // move right, and return the object
+                    this.position = this.position + 1
+                    return this.log[this.position]
+                }
+            }
+            
+            var app = new Vue({
+                el: '#flipmo-app',
+                data: {
+                    activeColor: 'black',
+                    colors: ['black', 'white', 'invert'],
+                    title: 'untitled',
+                    showPbm: false,
+                    pbm: '',
+                    say: ''
+                },
+                created() {
+                    window.addEventListener('keypress', this.hotkey);
+                },
+                mounted() {
+                    this.flipmos = new Flipmos();
+                    this.flipmo = new Flipmo(
+                            document.getElementById('flipdot'),
+                            {
+                                dotSize: 8,
+                                gridRows: 20,
+                                gridCols: 112
+                            }
+                        )
+                    ;
+                    this.flipmo.canvas.addEventListener('mouseup', (function(event) {
+                        this.pbm = this.flipmo.getPbm(this.title);
+                    }).bind(this));
+                },
+                methods: {
+                    hotkey(event) {
+                        if (event.target.localName == 'input') {
+                            event.stopPropagation();
+                            return;
+                        }
+                        switch (event.key) {
+                            case 'c':
+                                this.cycleColor();
+                                break;
+                            case 'p':
+                                this.upload();
+                                break;
+                            case 'd':
+                                this.download();
+                                break;
+                            case 's':
+                                this.toggleShowPbm();
+                                break;
+                        }
+                    },
+                    upload() {
+                        this.title = this.title === '' ? 'untitled' : this.title;
+                        var pbm = this.flipmo.getPbm(this.title);
+                        this.flipmos.upload(pbm, this.title);
+                        this.flipmos.show(this.title);
+                    },
+                    setColor(color) {
+                        this.flipmo.color = color;
+                        this.activeColor = color;
+                    },
+                    cycleColor() {
+                        var nextColor = this.colors.find((item, index, array) => {
+                            if (index == 0 && array[array.length - 1] == this.activeColor) {
+                                return true;
+                            }
+                            if (index <= array.length - 1 && array[index - 1] == this.activeColor) {
+                                return true;
+                            }
+                        });
+                        this.flipmo.color = nextColor;
+                        this.activeColor = nextColor;
+                    },
+                    toggleShowPbm() {
+                        //this.pbm = this.flipmo.getPbm(this.title);
+                        //this.showPbm = true;
+                        this.showPbm = this.showPbm == false ? true : false;
+                    }
+                }
+            });
+
+        </script>
+    </body>
+</html>
